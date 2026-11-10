@@ -1,0 +1,37 @@
+name: "CmdTab"
+options:
+  deploymentTarget:
+    macOS: "15.0"
+  xcodeVersion: "27.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    # Ad-hoc default; the app target overrides it with Developer ID.
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "86H6CNLN4C"
+targets:
+  "CmdTab":
+    type: application
+    platform: macOS
+    sources:
+      # App/AppIcon.icns (built from assets/logo.png with sips + iconutil) is copied as a resource.
+      - path: App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "com.math2it.cmdtab"
+        GENERATE_INFOPLIST_FILE: YES
+        # Holds CFBundleIconFile: Xcode does not honour INFOPLIST_KEY_CFBundleIconFile (checked in the built Info.plist).
+        INFOPLIST_FILE: App/Info.plist
+        INFOPLIST_KEY_LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
+        INFOPLIST_KEY_CFBundleDisplayName: "CmdTab"
+        SWIFT_OBJC_BRIDGING_HEADER: App/CmdTab-Bridging-Header.h
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        INFOPLIST_KEY_LSUIElement: YES
+        # Debug is Developer ID-signed so the Accessibility grant survives rebuilds
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application"
