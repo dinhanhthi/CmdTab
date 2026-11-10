@@ -35,3 +35,21 @@ targets:
         # Debug is Developer ID-signed so the Accessibility grant survives rebuilds
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Developer ID Application"
+    scheme:
+      testTargets:
+        - CmdTabTests
+  # Hostless: the pure switcher files are compiled in directly, so `xcodebuild test` never launches CmdTab
+  # or touches the system hotkeys. No TEST_HOST and no dependency on the app (XcodeGen would infer a host).
+  "CmdTabTests":
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/CmdTabTests
+      - path: App/Switcher/WindowFilter.swift
+      - path: App/Switcher/SwitcherSession.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "com.math2it.cmdtab.tests"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
