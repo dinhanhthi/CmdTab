@@ -48,23 +48,14 @@ struct SettingsSidebarView: View {
             ZStack {
                 ForEach(SettingsSection.allCases.filter(opened.contains)) { page in
                     let selected = page == navigation.section
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
-                            content(page)
-                        }
-                        // 12 pt lower than the sidebar card (about 20 pt under the header's capsules) and 12 pt
-                        // from its trailing edge.
-                        .padding(.top, SettingsMetrics.contentTopOffset)
-                        .padding(.leading, SettingsMetrics.sidebarInset)
-                        .padding([.trailing, .bottom], SettingsMetrics.pagePadding)
-                    }
-                    .labeledContentStyle(.settingsRow)
-                    .opacity(selected ? 1 : 0)
-                    // The leaving section fades out faster, so the two never show through each other.
-                    .animation(switchAnimation(selected: selected), value: selected)
-                    .allowsHitTesting(selected)
-                    .disabled(!selected)
-                    .accessibilityHidden(!selected)
+                    pageView(page)
+                        .labeledContentStyle(.settingsRow)
+                        .opacity(selected ? 1 : 0)
+                        // The leaving section fades out faster, so the two never show through each other.
+                        .animation(switchAnimation(selected: selected), value: selected)
+                        .allowsHitTesting(selected)
+                        .disabled(!selected)
+                        .accessibilityHidden(!selected)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -100,7 +91,7 @@ struct SettingsSidebarView: View {
         .onMoveCommand(perform: moveSelection)
         // A raised card like the toolbar's capsules, instead of a divider beside the sections.
         .modifier(GlassCard(cornerRadius: SettingsMetrics.sidebarRadius, raised: true))
-        // At the top of the safe area: about 8 pt under the toolbar's capsules. The page starts 12 pt lower.
+        // At the top of the safe area: about 8 pt under the toolbar's capsules. The page starts at the same top edge.
         .padding([.leading, .bottom], SettingsMetrics.sidebarInset)
     }
 
@@ -119,6 +110,27 @@ struct SettingsSidebarView: View {
     private func switchAnimation(selected: Bool) -> Animation? {
         if reduceMotion { return nil }
         return selected ? Motion.standard : Motion.exit
+    }
+
+    /// A section's page. No top padding: its first element is top-aligned with the sidebar card. About is one card
+    /// that fills the column, its bottom aligned with the sidebar card's too; the others scroll.
+    @ViewBuilder
+    private func pageView(_ page: SettingsSection) -> some View {
+        if page == .about {
+            content(page)
+                .padding(.leading, SettingsMetrics.sidebarInset)
+                .padding(.trailing, SettingsMetrics.pagePadding)
+                .padding(.bottom, SettingsMetrics.sidebarInset)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: SettingsMetrics.cardSpacing) {
+                    content(page)
+                }
+                // 12 pt from the sidebar card's trailing edge.
+                .padding(.leading, SettingsMetrics.sidebarInset)
+                .padding([.trailing, .bottom], SettingsMetrics.pagePadding)
+            }
+        }
     }
 
     @ViewBuilder
@@ -169,24 +181,26 @@ struct SettingsSidebarView: View {
                               granted: screenRecording.isGranted, request: screenRecording.request)
             }
         case .about:
-            SettingsGroup(nil) {
-                VStack(spacing: 10) {
-                    Image(nsImage: NSImage(named: "logo") ?? NSImage())
-                        .resizable()
-                        .frame(width: 96, height: 96)
-                        .accessibilityHidden(true)
-                    Text(AppInfo.name).font(.title2.weight(.semibold))
-                    Text("Version \(AppInfo.version)")
-                        .foregroundStyle(.secondary)
-                    Text("Anh-Thi DINH")
-                    Link("github.com/dinhanhthi/CmdTab",
-                         destination: URL(string: "https://github.com/dinhanhthi/CmdTab")!)
-                    Button("Check for Updates…") { updater.checkForUpdates() }
-                        .buttonStyle(RowTextButtonStyle(formRow: true))
-                        .disabled(!updater.canCheckForUpdates)
-                }
-                .frame(maxWidth: .infinity)
+            // One full-height card, its content at the top under a larger top padding.
+            VStack(spacing: 10) {
+                Image(nsImage: NSImage(named: "logo") ?? NSImage())
+                    .resizable()
+                    .frame(width: 96, height: 96)
+                    .accessibilityHidden(true)
+                Text(AppInfo.name).font(.title2.weight(.semibold))
+                Text("Version \(AppInfo.version)")
+                    .foregroundStyle(.secondary)
+                Text("Anh-Thi DINH")
+                Link("github.com/dinhanhthi/CmdTab",
+                     destination: URL(string: "https://github.com/dinhanhthi/CmdTab")!)
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                    .buttonStyle(RowTextButtonStyle(formRow: true))
+                    .disabled(!updater.canCheckForUpdates)
             }
+            .padding(.top, 40)
+            .padding(.horizontal, SettingsMetrics.cardPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .modifier(GlassCard(cornerRadius: SettingsMetrics.cardRadius))
         }
     }
 

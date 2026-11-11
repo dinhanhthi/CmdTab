@@ -647,7 +647,9 @@ extension ToolbarContent {
 }
 
 /// Spacing of the settings pages (a 4 pt scale). The sidebar card starts at the top of the content area, about 8 pt
-/// under the header's capsules; a page's first card starts `contentTopOffset` lower (about 20 pt under them).
+/// under the header's capsules, and the page beside it starts at the same top edge: its first element (a card's
+/// title, or the card itself) is top-aligned with the sidebar card. Only the tab layout, which has no sidebar, starts
+/// its page `contentTopOffset` lower.
 enum SettingsMetrics {
     /// Corner radius of a content card (`GlassCard`'s default).
     static let cardRadius: CGFloat = 14
@@ -665,7 +667,8 @@ enum SettingsMetrics {
     static let sidebarRowsPadding: CGFloat = 10
     /// The sidebar card's inset from the window's leading and bottom edges, and the gap from it to the page.
     static let sidebarInset: CGFloat = 12
-    /// How much lower than the sidebar card's top a page's first card starts.
+    /// Tab layout only: the page's top gap under the top of the content area (about 20 pt under the header's
+    /// capsules). Never in the sidebar layout, whose page is top-aligned with the sidebar card.
     static let contentTopOffset: CGFloat = 12
 }
 
