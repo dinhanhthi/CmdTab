@@ -58,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if Preferences.isEnabled { switcher.start() }
         // Without Accessibility the switcher cannot run: show why and how to grant it.
         if !accessibility.isTrusted { showSettings(section: .permissions) }
-        // `start` does nothing more when the switcher is already armed.
+        // When the switcher is already armed, `start` only prefetches the thumbnails again.
         accessibility.onTrusted = { [weak self] in
             if Preferences.isEnabled { self?.switcher.start() }
         }

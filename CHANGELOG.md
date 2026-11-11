@@ -4,6 +4,9 @@ All notable changes to CmdTab are listed here. `scripts/publish-release.sh` uses
 
 ## [Unreleased]
 
+- Window previews are captured in the background when CmdTab starts, so the first Cmd+Tab on any screen already shows them instead of app icons.
+- Cached previews are kept when you switch between screens of different scales (for example a Retina and a non-Retina display).
+
 ## [0.1.0] - 2026-11-11
 
 - First version.

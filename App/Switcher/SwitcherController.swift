@@ -1,10 +1,11 @@
 import AppKit
 
 /// Runs the switcher: a hotkey press reads the windows and starts a `SwitcherSession`, a hold shows the
-/// panel, the release of the modifier commits it, and a commit focuses the chosen window. Between sessions
-/// nothing runs here: no timer, no polling, no animation; what is left is the Carbon hotkeys, two workspace
-/// observers (an app activation refreshes the window classifier and has it watch that app, an app that quits is
-/// forgotten) and the classifier's Accessibility observer of the frontmost app.
+/// panel, the release of the modifier commits it, and a commit focuses the chosen window. Between sessions the
+/// only work is event-driven: a one-off background thumbnail capture when the switcher starts, and nothing periodic
+/// (no timer, no polling, no animation); what is left is the Carbon hotkeys, two workspace observers (an app
+/// activation refreshes the window classifier and has it watch that app, an app that quits is forgotten) and the
+/// classifier's Accessibility observer of the frontmost app.
 @MainActor
 final class SwitcherController {
     private let monitor = HotkeyMonitor()
@@ -36,16 +37,17 @@ final class SwitcherController {
     /// 64 entries or the screen scale changes.
     private var icons: [pid_t: CGImage] = [:]
     private var iconScale: CGFloat = 0
-    /// Window thumbnails, made at `thumbnailBox` x `thumbnailScale` pixels; emptied when the box changes, kept
-    /// across screens of another scale.
+    /// Window thumbnails, made at `thumbnailBox` x the panel screen's scale in a session, or the window's display
+    /// scale when prefetched; emptied when the box changes.
     private let thumbnails = ThumbnailCache()
     private var thumbnailBox: CGSize = .zero
-    private var thumbnailScale: CGFloat = 0
     /// The selected tile while the panel shows: the capture order starts there.
     private var selectedIndex = 0
     /// Fires 200 ms after `showPanel` and starts `captureTask`. Both exist only while the panel shows.
     private var captureTimer: DispatchWorkItem?
     private var captureTask: Task<Void, Never>?
+    /// A background capture between sessions: it only fills the cache. A session start cancels it.
+    private var prefetchTask: Task<Void, Never>?
 
     func start() {
         monitor.onPress = { [weak self] key in self?.pressed(key) }
@@ -54,10 +56,19 @@ final class SwitcherController {
         if let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular {
             classifier.watch(pid: app.processIdentifier)
         }
+        // The first press on any screen finds thumbnails: the frontmost windows of all screens, as many as fit.
+        if CGPreflightScreenCaptureAccess() {
+            let snapshot = WindowSource.snapshot()
+            let admitted = WindowFilter.admitted(
+                snapshot.all, regularPIDs: snapshot.regularPIDs, isSwitchable: classifier.isSwitchable)
+            prefetch(admitted.prefix(ThumbnailCache.capacity).map(\.id))
+        }
     }
 
     func stop() {
         apply(session.handle(.cancel))
+        // While idle the cancel has no effects, so a prefetch would outlive the switcher.
+        cancelCapture()
         monitor.disarm()
         armedModifier = nil
         stopObserving()
@@ -69,7 +80,10 @@ final class SwitcherController {
     /// Call after a setting changed.
     func applyPreferences() {
         // The cached thumbnails were made for another box.
-        if Preferences.thumbnailSize.box != thumbnailBox { thumbnails.removeAll() }
+        if Preferences.thumbnailSize.box != thumbnailBox {
+            thumbnails.removeAll()
+            thumbnailBox = Preferences.thumbnailSize.box
+        }
         guard let armedModifier, armedModifier != Preferences.hotkeyModifier else { return }
         apply(session.handle(.cancel))
         arm()
@@ -274,11 +288,9 @@ final class SwitcherController {
         guard let layout else { return }
         let panel = self.panel ?? makePanel()
         let scale = layout.screen.backingScaleFactor
-        // A screen of another scale keeps the cache: an image of the other scale shows (aspect-fit in the box)
-        // until the capture replaces it.
+        // An image of another scale (prefetched, or from a session on another screen) shows aspect-fit in the box.
         if layout.thumbnail != thumbnailBox { thumbnails.removeAll() }
         thumbnailBox = layout.thumbnail
-        thumbnailScale = scale
         let tiles = list.map { window in
             SwitcherView.Tile(
                 id: window.id, title: window.title ?? window.ownerName,
@@ -315,7 +327,7 @@ final class SwitcherController {
         defer { Perf.end(token) }
         let panel = makePanel()
         let scale = layout.screen.backingScaleFactor
-        // No show has run yet, so no thumbnail is cached. The selection is set again by `showPanel`.
+        // The thumbnails (prefetched or not) and the selection are set by `showPanel`.
         let tiles = list.map { window in
             SwitcherView.Tile(
                 id: window.id, title: window.title ?? window.ownerName,
@@ -381,8 +393,10 @@ final class SwitcherController {
         captureTimer = nil
         guard panelShown, CGPreflightScreenCaptureAccess() else { return }
         let generation = showGeneration
-        captureTask = Task { [weak self, thumbnailBox, thumbnailScale, ids = captureOrder()] in
-            await WindowCapture.capture(ids, box: thumbnailBox, scale: thumbnailScale) { id, image in
+        // The panel's screen, fixed for the session: every tile is drawn at its scale.
+        let scale = layout?.screen.backingScaleFactor
+        captureTask = Task { [weak self, thumbnailBox, ids = captureOrder()] in
+            await WindowCapture.capture(ids, box: thumbnailBox, scale: scale) { id, image in
                 // A late image of a panel that hid, or of an earlier show, is dropped.
                 guard let self, self.panelShown, generation == self.showGeneration else { return }
                 self.thumbnails.set(image, for: id)
@@ -402,11 +416,30 @@ final class SwitcherController {
         return ids
     }
 
+    /// Fills the cache with `ids` off the main thread while no session runs, and only with Screen Recording (never
+    /// asked for here). The panel is never touched.
+    private func prefetch(_ ids: [CGWindowID]) {
+        guard !ids.isEmpty, session.phase == .idle, CGPreflightScreenCaptureAccess() else { return }
+        // No show has run yet.
+        if thumbnailBox == .zero { thumbnailBox = Preferences.thumbnailSize.box }
+        prefetchTask?.cancel()
+        prefetchTask = Task { [weak self, box = thumbnailBox] in
+            await WindowCapture.capture(ids, box: box, scale: nil) { id, image in
+                // An image made for an earlier box is dropped.
+                guard let self, self.thumbnailBox == box else { return }
+                self.thumbnails.set(image, for: id)
+            }
+        }
+    }
+
+    /// Stops the session's capture and any prefetch: the session's own capture takes over.
     private func cancelCapture() {
         captureTimer?.cancel()
         captureTimer = nil
         captureTask?.cancel()
         captureTask = nil
+        prefetchTask?.cancel()
+        prefetchTask = nil
     }
 
     /// The app icon of `pid`, rendered once into a `side`-point square at `scale`. One image serves the corner

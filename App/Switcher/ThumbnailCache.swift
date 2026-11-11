@@ -4,7 +4,7 @@ import CoreGraphics
 /// The images are stored at the pixel size they were captured at (thumbnail box x backing scale).
 @MainActor
 final class ThumbnailCache {
-    private static let capacity = 30
+    static let capacity = 30
 
     private var images: [CGWindowID: CGImage] = [:]
     /// The ids in `images`, least recently used first.
