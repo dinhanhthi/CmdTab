@@ -18,11 +18,14 @@ enum ScreenScope: String, CaseIterable, Sendable {
 /// Decides which windows the switcher lists. Pure: window bounds, display bounds and the mouse location
 /// share one global top-left space, so nothing is flipped here.
 enum WindowFilter {
-    /// Layer 0, alpha > 0, at least 100 x 100 points, owned by a regular app. The order is kept.
-    static func admitted(_ all: [WindowSnapshot], regularPIDs: Set<pid_t>) -> [WindowSnapshot] {
+    /// Layer 0, alpha > 0, at least 100 x 100 points, owned by a regular app, and switchable (not a sheet, as far
+    /// as `isSwitchable` knows). The order is kept.
+    static func admitted(
+        _ all: [WindowSnapshot], regularPIDs: Set<pid_t>, isSwitchable: (CGWindowID) -> Bool = { _ in true }
+    ) -> [WindowSnapshot] {
         all.filter {
             $0.layer == 0 && $0.alpha > 0 && $0.bounds.width >= 100 && $0.bounds.height >= 100
-                && regularPIDs.contains($0.pid)
+                && regularPIDs.contains($0.pid) && isSwitchable($0.id)
         }
     }
 
@@ -44,9 +47,10 @@ enum WindowFilter {
     /// The admitted windows, front to back. `mouseScreen` keeps those of the display containing the mouse
     /// (display 0 when the mouse is on none).
     static func list(
-        all: [WindowSnapshot], regularPIDs: Set<pid_t>, displays: [CGRect], mouse: CGPoint, scope: ScreenScope
+        all: [WindowSnapshot], regularPIDs: Set<pid_t>, displays: [CGRect], mouse: CGPoint, scope: ScreenScope,
+        isSwitchable: (CGWindowID) -> Bool = { _ in true }
     ) -> [WindowSnapshot] {
-        let windows = admitted(all, regularPIDs: regularPIDs)
+        let windows = admitted(all, regularPIDs: regularPIDs, isSwitchable: isSwitchable)
         guard scope == .mouseScreen else { return windows }
         let mouseDisplay = displays.firstIndex { $0.contains(mouse) } ?? 0
         return windows.filter { displayIndex(of: $0.bounds, displays: displays) == mouseDisplay }

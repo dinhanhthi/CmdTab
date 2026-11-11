@@ -42,11 +42,13 @@ private func window(
         ("zero alpha", window(2, alpha: 0)),
         ("too small", window(2, bounds: CGRect(x: 100, y: 100, width: 400, height: 99))),
         ("non-regular owner", window(2, pid: 99)),
+        ("not switchable", window(4)),
     ])
     func admittedDropsAWindowThatBreaksOneRule(_ name: String, _ rejected: WindowSnapshot) {
-        // The kept window sits exactly on the 100 x 100 floor.
+        // The kept window sits exactly on the 100 x 100 floor. Only window 4 (a sheet, say) is not switchable.
         let kept = window(1, bounds: CGRect(x: 0, y: 0, width: 100, height: 100))
-        #expect(WindowFilter.admitted([rejected, kept], regularPIDs: regular) == [kept], "\(name)")
+        #expect(
+            WindowFilter.admitted([rejected, kept], regularPIDs: regular, isSwitchable: { $0 != 4 }) == [kept], "\(name)")
     }
 
     @Test func startIndexSkipsTheFocusedWindowOnlyWhenItIsListedFirst() {
@@ -59,5 +61,14 @@ private func window(
         // The focused window is on another display: the list starts with another window of the frontmost app.
         #expect(WindowFilter.startIndex(list: [sameApp, other], admittedAll: admittedAll, frontmostPID: 10) == 0)
         #expect(WindowFilter.startIndex(list: [focused], admittedAll: [focused], frontmostPID: 10) == 0)
+        // A sheet of the frontmost app, listed first, is not switchable: the selection starts after the focused
+        // window, not on it.
+        let all = [window(4, pid: 10), focused, sameApp, other]
+        let switchable: (CGWindowID) -> Bool = { $0 != 4 }
+        let list = WindowFilter.list(
+            all: all, regularPIDs: regular, displays: displays, mouse: .zero, scope: .allScreens,
+            isSwitchable: switchable)
+        let admitted = WindowFilter.admitted(all, regularPIDs: regular, isSwitchable: switchable)
+        #expect(list[WindowFilter.startIndex(list: list, admittedAll: admitted, frontmostPID: 10)] == sameApp)
     }
 }

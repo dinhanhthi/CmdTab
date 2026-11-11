@@ -9,15 +9,35 @@ private let log = Logger(subsystem: "com.math2it.cmdtab", category: "Input")
 private let hotKeySignature: OSType = 0x436D_6454
 
 /// The switcher's keys as Carbon hotkeys: modifier+Tab and modifier+Shift+Tab while armed,
-/// modifier+Left / Right / Escape only during a session.
+/// modifier+Left / Right / Escape and their modifier+Shift variants only during a session.
 /// Carbon reports one press and one release per hold, so a held key repeats from a timer
 /// that exists only between the two.
 @MainActor
 final class HotkeyMonitor {
-    /// The raw value is the Carbon hotkey id.
-    enum Key: UInt32 {
-        case trigger = 1, reverse, left, right, escape
+    enum Key {
+        case trigger, reverse, left, right, escape
     }
+
+    /// The key of each Carbon hotkey id: 1 and 2 while armed, 3 to 8 during a session. Carbon matches modifiers
+    /// exactly and Shift can still be down from modifier+Shift+Tab, so each session key also has a modifier+Shift
+    /// variant (its id + 3) that reports the same `Key`.
+    private static func key(id: UInt32) -> Key? {
+        switch id {
+        case 1: .trigger
+        case 2: .reverse
+        case 3, 6: .left
+        case 4, 7: .right
+        case 5, 8: .escape
+        default: nil
+        }
+    }
+
+    /// The session hotkeys: Carbon id, key code, with Shift.
+    private static let sessionKeys: [(id: UInt32, keyCode: Int, shift: Bool)] = [
+        (5, kVK_Escape, false), (8, kVK_Escape, true),
+        (3, kVK_LeftArrow, false), (6, kVK_LeftArrow, true),
+        (4, kVK_RightArrow, false), (7, kVK_RightArrow, true),
+    ]
 
     /// Called for every press, and for every repeat of a held key.
     var onPress: ((Key) -> Void)?
@@ -27,7 +47,7 @@ final class HotkeyMonitor {
     private static var handlerInstalled = false
 
     private var modifier: HotkeyModifier?  // nil = not armed
-    private var refs: [Key: EventHotKeyRef] = [:]
+    private var refs: [UInt32: EventHotKeyRef] = [:]  // by Carbon id
     private var heldKey: Key?
     private var repeatTimer: DispatchSourceTimer?
 
@@ -38,8 +58,8 @@ final class HotkeyMonitor {
             disarm()
             let flags = modifier.carbonFlags
             guard Self.installHandler(),
-                  register(.trigger, keyCode: kVK_Tab, flags: flags),
-                  register(.reverse, keyCode: kVK_Tab, flags: flags | UInt32(shiftKey)) else {
+                  register(id: 1, keyCode: kVK_Tab, flags: flags),
+                  register(id: 2, keyCode: kVK_Tab, flags: flags | UInt32(shiftKey)) else {
                 disarm()
                 return false
             }
@@ -64,17 +84,17 @@ final class HotkeyMonitor {
         guard let modifier else { return }
         guard on else {
             stopRepeat()
-            for key in [Key.left, .right, .escape] {
-                if let ref = refs.removeValue(forKey: key) { UnregisterEventHotKey(ref) }
+            for entry in Self.sessionKeys {
+                if let ref = refs.removeValue(forKey: entry.id) { UnregisterEventHotKey(ref) }
             }
             return
         }
         let flags = modifier.carbonFlags
-        _ = register(.escape, keyCode: kVK_Escape, flags: flags)
-        // Control+Left and Control+Right belong to Mission Control.
-        guard modifier != .control else { return }
-        _ = register(.left, keyCode: kVK_LeftArrow, flags: flags)
-        _ = register(.right, keyCode: kVK_RightArrow, flags: flags)
+        for entry in Self.sessionKeys {
+            // Control+Left and Control+Right (with or without Shift) belong to Mission Control.
+            if modifier == .control, entry.keyCode != kVK_Escape { continue }
+            _ = register(id: entry.id, keyCode: entry.keyCode, flags: entry.shift ? flags | UInt32(shiftKey) : flags)
+        }
     }
 
     // MARK: Carbon
@@ -91,23 +111,23 @@ final class HotkeyMonitor {
         return handlerInstalled
     }
 
-    private func register(_ key: Key, keyCode: Int, flags: UInt32) -> Bool {
-        guard refs[key] == nil else { return true }
+    private func register(id: UInt32, keyCode: Int, flags: UInt32) -> Bool {
+        guard refs[id] == nil else { return true }
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
-            UInt32(keyCode), flags, EventHotKeyID(signature: hotKeySignature, id: key.rawValue),
-            GetEventDispatcherTarget(), 0, &ref)
+            UInt32(keyCode), flags, EventHotKeyID(signature: hotKeySignature, id: id), GetEventDispatcherTarget(), 0,
+            &ref)
         guard status == noErr, let ref else {
-            log.error("hotkey \(key.rawValue) not registered: \(status)")
+            log.error("hotkey \(id) not registered: \(status)")
             return false
         }
-        refs[key] = ref
+        refs[id] = ref
         return true
     }
 
     fileprivate func hotKey(id: UInt32, pressed: Bool) {
         // An event that was already queued when its key was unregistered is dropped.
-        guard let key = Key(rawValue: id), refs[key] != nil else { return }
+        guard refs[id] != nil, let key = Self.key(id: id) else { return }
         if pressed {
             // The timer starts before `onPress`: a press that ends the session cancels it.
             stopRepeat()
@@ -163,7 +183,9 @@ private let hotKeyHandler: EventHandlerUPP = { _, event, _ in
 
 /// The Dock's own switcher: symbolic hotkeys 1 (Cmd+Tab) and 2 (Cmd+Shift+Tab) in the WindowServer.
 /// The setting outlives the process that changed it, so every exit this process can see restores it,
-/// and every launch re-asserts it. Only SIGKILL leaves it off, until the next launch.
+/// and every launch re-asserts it. It stays off, until the next launch, after SIGKILL, a stack overflow
+/// (the crash handler has no stack left to run on) and the signals not handled here (for example SIGPIPE,
+/// SIGUSR1, SIGUSR2).
 enum SymbolicHotkeys {
     /// True while CmdTab has the Dock's switcher off. Read from signal handlers.
     private static let disabled = Atomic<Bool>(false)
@@ -186,7 +208,7 @@ enum SymbolicHotkeys {
         // A run that was killed left the switcher off. This also creates `disabled` before any handler can read it.
         setDockSwitcher(enabled: true)
 
-        for number in [SIGTERM, SIGINT, SIGHUP] {
+        for number in [SIGTERM, SIGINT, SIGHUP, SIGQUIT] {
             // The default action would kill the process before the source fires.
             signal(number, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
@@ -203,7 +225,7 @@ enum SymbolicHotkeys {
         // also resets the action itself.
         var action = sigaction(
             __sigaction_u: __sigaction_u(__sa_handler: crashHandler), sa_mask: 0, sa_flags: SA_RESETHAND)
-        for number in [SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGTRAP] { sigaction(number, &action, nil) }
+        for number in [SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGTRAP, SIGFPE, SIGSYS] { sigaction(number, &action, nil) }
 
         // The runtime aborts after this handler returns; the switcher is back by then.
         NSSetUncaughtExceptionHandler { _ in SymbolicHotkeys.restoreIfDisabled() }
