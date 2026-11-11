@@ -26,6 +26,7 @@ CmdTab is a small menu bar app that replaces the system Cmd+Tab with a switcher 
 - Thumbnail size and App icon size: Small, Medium or Large each.
 - Hide animation: None (default) or Fade out.
 - "Show CmdTab in": Dock, Menu bar (default) or Hidden. When hidden, open CmdTab again to show Settings.
+- "Enable CmdTab" in the menu bar menu turns the switcher off and on; off gives Cmd+Tab back to the system.
 - Start at login.
 - Updates through Sparkle ("Check for Updates…" in the menu and in Settings > About).
 

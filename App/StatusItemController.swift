@@ -1,7 +1,8 @@
 import AppKit
 
-/// CmdTab's menu bar item: the template SF Symbol `macwindow.on.rectangle` and a menu (Settings…, Check for
-/// Updates…, Quit CmdTab). Created when the status item should show; `remove()` takes it out of the menu bar.
+/// CmdTab's menu bar item: the app's logo (dimmed while the switcher is off) and a menu (Enable CmdTab, Settings…,
+/// Check for Updates…, Quit CmdTab). Created when the status item should show; `remove()` takes it out of the menu
+/// bar.
 @MainActor
 final class StatusItemController: NSObject, NSMenuItemValidation {
     private let updater: Updater
@@ -13,10 +14,15 @@ final class StatusItemController: NSObject, NSMenuItemValidation {
         self.showSettings = showSettings
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
-        let image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "CmdTab")
-        image?.isTemplate = true
+        // A copy: resizing the named image would resize it in About too.
+        let image = NSImage(named: "logo")?.copy() as? NSImage
+        image?.size = NSSize(width: 18, height: 18)
+        image?.accessibilityDescription = "CmdTab"
         statusItem.button?.image = image
+        statusItem.button?.appearsDisabled = !Preferences.isEnabled
         let menu = NSMenu()
+        menu.addItem(item("Enable CmdTab", #selector(toggleEnabled)))
+        menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(.separator())
         menu.addItem(item("Check for Updates…", #selector(checkForUpdates)))
@@ -36,9 +42,17 @@ final class StatusItemController: NSObject, NSMenuItemValidation {
         return item
     }
 
-    /// Runs each time the menu opens. "Check for Updates…" is disabled while the updater is off.
+    /// Runs each time the menu opens. "Enable CmdTab" shows a check while on; "Check for Updates…" is disabled while
+    /// the updater is off.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        menuItem.action == #selector(checkForUpdates) ? updater.canCheckForUpdates : true
+        if menuItem.action == #selector(toggleEnabled) { menuItem.state = Preferences.isEnabled ? .on : .off }
+        return menuItem.action == #selector(checkForUpdates) ? updater.canCheckForUpdates : true
+    }
+
+    /// The delegate's defaults observer starts or stops the switcher.
+    @objc private func toggleEnabled() {
+        Preferences.isEnabled.toggle()
+        statusItem.button?.appearsDisabled = !Preferences.isEnabled
     }
 
     @objc private func openSettings() { showSettings() }

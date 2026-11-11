@@ -11,6 +11,7 @@ enum Preferences {
     static let appIconSizeKey = "AppIconSize"
     static let hideAnimationKey = "HideAnimation"
     static let iconVisibilityKey = "IconVisibility"
+    static let enabledKey = "Enabled"
 
     static var hotkeyModifier: HotkeyModifier { value(hotkeyModifierKey, default: .command) }
     static var screenScope: ScreenScope { value(screenScopeKey, default: .mouseScreen) }
@@ -18,6 +19,11 @@ enum Preferences {
     static var appIconSize: AppIconSize { value(appIconSizeKey, default: .medium) }
     static var hideAnimation: HideAnimation { value(hideAnimationKey, default: .none) }
     static var iconVisibility: IconVisibility { value(iconVisibilityKey, default: .menuBar) }
+    /// Off: the switcher is disarmed and the system Cmd+Tab works. On by default.
+    static var isEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+    }
 
     private static func value<Value: RawRepresentable>(_ key: String, default: Value) -> Value
     where Value.RawValue == String {

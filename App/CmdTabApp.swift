@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var appliedIconVisibility = Preferences.iconVisibility
     private var appliedHotkeyModifier = Preferences.hotkeyModifier
     private var appliedThumbnailSize = Preferences.thumbnailSize
+    private var appliedEnabled = Preferences.isEnabled
     private var defaultsObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -54,11 +55,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         screenRecording = ScreenRecordingPermission()
         observeDefaults()
         applyIconVisibility()
-        switcher.start()
+        if Preferences.isEnabled { switcher.start() }
         // Without Accessibility the switcher cannot run: show why and how to grant it.
         if !accessibility.isTrusted { showSettings(section: .permissions) }
         // `start` does nothing more when the switcher is already armed.
-        accessibility.onTrusted = { [weak self] in self?.switcher.start() }
+        accessibility.onTrusted = { [weak self] in
+            if Preferences.isEnabled { self?.switcher.start() }
+        }
     }
 
     /// Disarms the switcher, which gives Cmd+Tab back to the Dock.
@@ -176,13 +179,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let iconVisibility = Preferences.iconVisibility
         let hotkeyModifier = Preferences.hotkeyModifier
         let thumbnailSize = Preferences.thumbnailSize
+        let enabled = Preferences.isEnabled
         let iconChanged = iconVisibility != appliedIconVisibility
         let switcherChanged = hotkeyModifier != appliedHotkeyModifier || thumbnailSize != appliedThumbnailSize
+        let enabledChanged = enabled != appliedEnabled
         // Stored first: applying can write defaults (the status item's position), which posts again at once.
         appliedIconVisibility = iconVisibility
         appliedHotkeyModifier = hotkeyModifier
         appliedThumbnailSize = thumbnailSize
+        appliedEnabled = enabled
         if iconChanged { applyIconVisibility() }
+        // Off: `stop` disarms, which gives Cmd+Tab back to the Dock.
+        if enabledChanged { enabled ? switcher.start() : switcher.stop() }
         if switcherChanged { switcher.applyPreferences() }
     }
 
