@@ -36,7 +36,8 @@ final class SwitcherController {
     /// 64 entries or the screen scale changes.
     private var icons: [pid_t: CGImage] = [:]
     private var iconScale: CGFloat = 0
-    /// Window thumbnails, made at `thumbnailBox` x `thumbnailScale` pixels; emptied when either changes.
+    /// Window thumbnails, made at `thumbnailBox` x `thumbnailScale` pixels; emptied when the box changes, kept
+    /// across screens of another scale.
     private let thumbnails = ThumbnailCache()
     private var thumbnailBox: CGSize = .zero
     private var thumbnailScale: CGFloat = 0
@@ -273,11 +274,11 @@ final class SwitcherController {
         guard let layout else { return }
         let panel = self.panel ?? makePanel()
         let scale = layout.screen.backingScaleFactor
-        if layout.thumbnail != thumbnailBox || scale != thumbnailScale {
-            thumbnails.removeAll()
-            thumbnailBox = layout.thumbnail
-            thumbnailScale = scale
-        }
+        // A screen of another scale keeps the cache: an image of the other scale shows (aspect-fit in the box)
+        // until the capture replaces it.
+        if layout.thumbnail != thumbnailBox { thumbnails.removeAll() }
+        thumbnailBox = layout.thumbnail
+        thumbnailScale = scale
         let tiles = list.map { window in
             SwitcherView.Tile(
                 id: window.id, title: window.title ?? window.ownerName,
