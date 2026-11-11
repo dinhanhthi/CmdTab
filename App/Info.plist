@@ -8,7 +8,7 @@
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/dinhanhthi/CmdTab/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string></string>
+	<string>YZl6CpOYLK4pCyWj8Na0mUHREWFP747KVk8g8Plrbtc=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUVerifyUpdateBeforeExtraction</key>
