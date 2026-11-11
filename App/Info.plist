@@ -5,5 +5,13 @@
 	<!-- Partial Info.plist: merged with the generated one (GENERATE_INFOPLIST_FILE=YES). -->
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/dinhanhthi/CmdTab/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string></string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 </dict>
 </plist>
