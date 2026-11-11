@@ -4,6 +4,6 @@ All notable changes to CmdTab are listed here. `scripts/publish-release.sh` uses
 
 ## [Unreleased]
 
-## [0.1.0] - YYYY-MM-DD
+## [0.1.0] - 2026-11-11
 
 - First version.
