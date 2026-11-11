@@ -40,8 +40,8 @@ targets:
         # SkyLight (private) holds the SLPS focus calls of WindowFocus.
         FRAMEWORK_SEARCH_PATHS: "$(SDKROOT)/System/Library/PrivateFrameworks"
         OTHER_LDFLAGS: "-framework SkyLight"
-        MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.1
+        CURRENT_PROJECT_VERSION: 2
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: NO
         INFOPLIST_KEY_LSUIElement: YES
