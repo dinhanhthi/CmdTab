@@ -10,6 +10,18 @@ enum WindowFocus {
     /// Returns at once. The `focus` interval runs from this request to the last focus call's return.
     static func focus(windowID: CGWindowID, pid: pid_t) {
         let interval = Perf.begin("focus")
+        // CmdTab's own window (Settings): AppKit would answer the Accessibility calls on the focus queue and order
+        // the window off the main thread, which macOS stops the app for. AppKit on the main thread instead.
+        if pid == getpid() {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.windows.first { $0.windowNumber == Int(windowID) }?.makeKeyAndOrderFront(nil)
+                }
+                Perf.end(interval)
+            }
+            return
+        }
         queue.async {
             raise(windowID: windowID, pid: pid)
             // Also when the window was not raised (no answer, no Accessibility): its app still comes forward.

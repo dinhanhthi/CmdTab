@@ -38,7 +38,10 @@ final class AXWindowClassifier: @unchecked Sendable {
     /// deny list; its `onScreenIDs` that Accessibility does not list (sheets) do not. When the app or one of its
     /// windows does not answer, or the app lists no window while `onScreenIDs` is not empty, nothing changes: a
     /// slow or confused app must not lose its real windows.
+    /// CmdTab's own windows are never classified (they stay switchable): AppKit would answer the Accessibility calls
+    /// on this queue, off the main thread.
     func refresh(pid: pid_t, onScreenIDs: [CGWindowID]) {
+        guard pid != getpid() else { return }
         queue.async { [self] in update(pid: pid, onScreenIDs: onScreenIDs) }
     }
 
@@ -51,8 +54,10 @@ final class AXWindowClassifier: @unchecked Sendable {
     }
 
     /// Returns at once. Observes the window and sheet creations of `pid` (the frontmost regular app) instead of the
-    /// app watched so far; each one refreshes `pid` 50 ms later. Nothing runs between two creations.
+    /// app watched so far; each one refreshes `pid` 50 ms later. Nothing runs between two creations. CmdTab itself is
+    /// never watched (see `refresh`).
     func watch(pid: pid_t) {
+        guard pid != getpid() else { return }
         queue.async { [self] in
             guard watched?.pid != pid else { return }
             unwatch()
