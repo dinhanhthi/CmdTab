@@ -57,12 +57,12 @@ final class StatusItemController: NSObject, NSMenuItemValidation {
         let logo = logo
         let badged = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
             logo?.draw(in: rect)
-            let badge = NSRect(x: rect.maxX - 11, y: rect.minY, width: 11, height: 11)
+            let badge = NSRect(x: rect.maxX - 9, y: rect.minY, width: 9, height: 9)
             // A white disc, then a bold arrow in a deep green (the system green, 45 % of the way to black).
             NSColor.white.setFill()
             NSBezierPath(ovalIn: badge).fill()
             let green = NSColor.systemGreen.blended(withFraction: 0.45, of: .black) ?? .systemGreen
-            let configuration = NSImage.SymbolConfiguration(pointSize: 11, weight: .black)
+            let configuration = NSImage.SymbolConfiguration(pointSize: 9, weight: .black)
                 .applying(NSImage.SymbolConfiguration(paletteColors: [green]))
             if let arrow = NSImage(systemSymbolName: "arrow.down", accessibilityDescription: nil)?
                 .withSymbolConfiguration(configuration) {
