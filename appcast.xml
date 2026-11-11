@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>CmdTab</title>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Wed, 11 Nov 2026 11:55:21 -0600</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/CmdTab/releases</sparkle:fullReleaseNotesLink>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/dinhanhthi/CmdTab/releases/download/v0.1.0/CmdTab-0.1.0.zip" length="3395421" type="application/octet-stream" sparkle:edSignature="4Jwt/Zec6LFevYZg6mJOmTdsuaDPx+kztaHoeryRGIdkKzqvSC5TRs7oqzxYFmwkUs2lrky4o/okKHENuQENCw=="/>
+        </item>
+    </channel>
+</rss>
