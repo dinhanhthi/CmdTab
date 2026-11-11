@@ -3,6 +3,16 @@
     <channel>
         <title>CmdTab</title>
         <item>
+            <title>0.1.1</title>
+            <pubDate>Wed, 11 Nov 2026 16:04:09 -0600</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/CmdTab/releases</sparkle:fullReleaseNotesLink>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/dinhanhthi/CmdTab/releases/download/v0.1.1/CmdTab-0.1.1.zip" length="3515371" type="application/octet-stream" sparkle:edSignature="ERcawxtUSxLa+RJi6h+PUpvhE506mu2Mogu6Q185w5llTCN0u24MUuDk+GPgjq+2U4ok7kPXpCXQ0d63cj3sDw=="/>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Wed, 11 Nov 2026 11:55:21 -0600</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/dinhanhthi/CmdTab/releases</sparkle:fullReleaseNotesLink>
