@@ -1,17 +1,19 @@
 import AppKit
 
 /// CmdTab's menu bar item: the app's logo (dimmed while the switcher is off) and a menu (Enable CmdTab, Settings…,
-/// Check for Updates…, Quit CmdTab). Created when the status item should show; `remove()` takes it out of the menu
-/// bar.
+/// About CmdTab, Check for Updates…, Quit CmdTab). Created when the status item should show; `remove()` takes it out
+/// of the menu bar.
 @MainActor
 final class StatusItemController: NSObject, NSMenuItemValidation {
     private let updater: Updater
     private let showSettings: () -> Void
+    private let showAbout: () -> Void
     private let statusItem: NSStatusItem
 
-    init(updater: Updater, showSettings: @escaping () -> Void) {
+    init(updater: Updater, showSettings: @escaping () -> Void, showAbout: @escaping () -> Void) {
         self.updater = updater
         self.showSettings = showSettings
+        self.showAbout = showAbout
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
         // A copy: resizing the named image would resize it in About too.
@@ -25,6 +27,7 @@ final class StatusItemController: NSObject, NSMenuItemValidation {
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
         menu.addItem(.separator())
+        menu.addItem(item("About CmdTab", #selector(openAbout)))
         menu.addItem(item("Check for Updates…", #selector(checkForUpdates)))
         menu.addItem(.separator())
         menu.addItem(item("Quit CmdTab", #selector(quit), key: "q"))
@@ -56,6 +59,7 @@ final class StatusItemController: NSObject, NSMenuItemValidation {
     }
 
     @objc private func openSettings() { showSettings() }
+    @objc private func openAbout() { showAbout() }
     @objc private func checkForUpdates() { updater.checkForUpdates() }
     @objc private func quit() { NSApp.terminate(nil) }
 }

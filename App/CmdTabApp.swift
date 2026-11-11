@@ -152,7 +152,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let mode = Preferences.iconVisibility
         if mode == .menuBar {
             if statusItem == nil, let updater {
-                statusItem = StatusItemController(updater: updater, showSettings: { [weak self] in self?.showSettings() })
+                statusItem = StatusItemController(updater: updater, showSettings: { [weak self] in self?.showSettings() },
+                                                  showAbout: { [weak self] in self?.showAbout() })
             }
         } else {
             statusItem?.remove()
