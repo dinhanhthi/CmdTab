@@ -8,3 +8,12 @@ CGError CGSSetSymbolicHotKeyEnabled(int hotKey, bool enabled);
 
 // The CGWindowID behind an Accessibility window element.
 AXError _AXUIElementGetWindow(AXUIElementRef element, CGWindowID *windowID);
+
+// Process Manager's pid → PSN lookup. Swift refuses the SDK declaration (deprecated in 10.9); the asm label
+// calls the same symbol.
+OSStatus CmdTabGetProcessForPID(pid_t pid, ProcessSerialNumber *psn) __asm("_GetProcessForPID");
+
+// SkyLight (linked in project.yml). Bring a process forward with one of its windows, and post an event record
+// to a process. Declarations as in yabai (MIT, github.com/koekeishiya/yabai, src/misc/extern.h).
+CGError _SLPSSetFrontProcessWithOptions(ProcessSerialNumber *psn, CGWindowID windowID, uint32_t mode);
+CGError SLPSPostEventRecordTo(ProcessSerialNumber *psn, uint8_t *bytes);

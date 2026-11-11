@@ -40,9 +40,11 @@ docs/RELEASING.md       Release guide (maintainer only)
 
 ## Things to know
 
-- **Private APIs**, declared in `App/CmdTab-Bridging-Header.h` and resolved through CoreGraphics and ApplicationServices (no private framework is linked):
+- **Private APIs**, declared in `App/CmdTab-Bridging-Header.h` and resolved through CoreGraphics, ApplicationServices and SkyLight (the one private framework, linked in `project.yml`):
   - `CGSSetSymbolicHotKeyEnabled` turns the system Cmd+Tab off while CmdTab uses ⌘ Tab. The setting lives in the WindowServer and outlives the process.
   - `_AXUIElementGetWindow` maps an Accessibility window to its window ID.
+  - `_SLPSSetFrontProcessWithOptions` and `SLPSPostEventRecordTo` (SkyLight) bring the chosen window's app forward and make that window key, as yabai does. macOS ignores `NSRunningApplication.activate()` from an app that is not active, which CmdTab never is.
+  - `CmdTabGetProcessForPID` is `GetProcessForPID` under an asm label, because Swift refuses the deprecated SDK declaration.
 - **Lost the system Cmd+Tab?** Stopping CmdTab from Xcode or with `kill -9` skips the cleanup, so the system Cmd+Tab stays off. Launch CmdTab again and quit it normally (`osascript -e 'quit app "CmdTab"'`). Or develop with the ⌥ Tab hotkey, which leaves the system Cmd+Tab alone.
 - **Screen Recording** grants apply only after CmdTab restarts.
 - **Logs**: subsystem `com.math2it.cmdtab`, categories `Perf`, `Input`, `Permissions`, `Updater`.

@@ -37,6 +37,9 @@ targets:
         INFOPLIST_KEY_LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
         INFOPLIST_KEY_CFBundleDisplayName: "CmdTab"
         SWIFT_OBJC_BRIDGING_HEADER: App/CmdTab-Bridging-Header.h
+        # SkyLight (private) holds the SLPS focus calls of WindowFocus.
+        FRAMEWORK_SEARCH_PATHS: "$(SDKROOT)/System/Library/PrivateFrameworks"
+        OTHER_LDFLAGS: "-framework SkyLight"
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
         ENABLE_HARDENED_RUNTIME: YES

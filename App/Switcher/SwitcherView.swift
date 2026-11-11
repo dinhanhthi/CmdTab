@@ -56,6 +56,7 @@ final class SwitcherView: NSView {
         highlight.isHidden = true
         highlight.cornerRadius = Self.cornerRadius + Self.highlightInset
         highlight.cornerCurve = .continuous
+        highlight.borderWidth = 3
         layer?.addSublayer(highlight)
         addTrackingArea(
             NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
@@ -72,7 +73,10 @@ final class SwitcherView: NSView {
         // AppKit makes the view's appearance current here, so the system colours resolve for light or dark mode.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        highlight.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+        // The accent colour, filled and outlined, so the selection reads at a glance over any wallpaper.
+        let accent = NSColor.controlAccentColor
+        highlight.backgroundColor = accent.withAlphaComponent(0.3).cgColor
+        highlight.borderColor = accent.cgColor
         let text = NSColor.labelColor.cgColor
         for layers in pool { layers.title.foregroundColor = text }
         CATransaction.commit()
