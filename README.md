@@ -11,8 +11,6 @@ Cmd+Tab between windows, not apps, on macOS.
 
 </div>
 
-CmdTab is a small menu bar app that replaces the system Cmd+Tab with a switcher that lists windows, front to back, instead of one entry per app.
-
 ![CmdTab switcher](assets/screenshot.jpg)
 
 ## Features
