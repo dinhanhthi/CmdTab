@@ -4,6 +4,8 @@ All notable changes to CmdTab are listed here. `scripts/publish-release.sh` uses
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-12
+
 ### Added
 - When not all windows fit, the previews shrink so more of them show (Settings > Appearance > Shrink to fit, on by default).
 - Settings > General can list minimized windows and the windows of hidden apps (both off by default); they show after the other windows, marked "Minimized" or "Hidden", and choosing one restores it.
