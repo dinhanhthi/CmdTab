@@ -22,8 +22,9 @@ the whole flow: version bump, changelog, commit, push to `main`, and `scripts/sh
 the changelog, do not ask before pushing or before `ship.sh`. Decide with the rules below and
 keep going. These overrides beat the generic cf-ship rules:
 
-- Pushing the `chore(release): vX.Y.Z` commit straight to `main` is expected (this repo
-  releases from `main`); skip cf-ship's "never push to main" warning and its PR step.
+- Pushing local `main` straight to `origin/main` is expected (this repo releases from `main`):
+  the commits already on local `main` and the `chore(release): vX.Y.Z` commit. Skip cf-ship's
+  "never push to main" warning and its PR step. Never force-push.
 - A version in the hint (e.g. `/cf-ship 1.4.0`) is used as-is, skipping Step B2's classification.
 - Commits are one line (`<type>(<scope>): <summary>`), with no body and no co-author or AI
   attribution lines.
@@ -106,19 +107,11 @@ gh auth status
 `X.Y.Z` is `MARKETING_VERSION` in `project.yml` at `HEAD`. Decide from the **remote** state
 (`git fetch origin` first; `HEAD` subject: `git log -1 --format=%s`), in this order:
 
-- **(a) Unpushed commits.** If `git rev-list origin/main..HEAD` is non-empty, both checks below
-  must print nothing:
-
-  ```bash
-  git log --format=%s origin/main..HEAD | grep -vE '^chore\(release\): (appcast )?v[0-9]+\.[0-9]+\.[0-9]+$'
-  git diff --name-only origin/main..HEAD | grep -vxE 'CHANGELOG\.md|project\.yml|appcast\.xml'
-  ```
-
-  If both print nothing (every unpushed commit is a `chore(release)` commit, touching only
-  `CHANGELOG.md`, `project.yml` and `appcast.xml`) → `git push origin main`, then keep evaluating
-  (b)–(d). If either prints anything → STOP, do not push: "local main has unpushed commits that
-  are not release commits — review and push them yourself (or drop them), then run /cf-ship
-  again." (`scripts/ship.sh` requires `HEAD` to equal `origin/main`.)
+- **(a) Unpushed commits.** If `git rev-list origin/main..HEAD` is non-empty, print them
+  (`git log --oneline origin/main..HEAD`), then `git push origin main` (never force: Step B0 already
+  stopped when local `main` and `origin/main` diverged, so this is a fast-forward), then keep
+  evaluating (b)–(d). Running `/cf-ship` is the approval to push every commit on local `main`,
+  feature commits included. (`scripts/ship.sh` requires `HEAD` to equal `origin/main`.)
 - **(b) Tag missing on origin.** `git ls-remote --tags origin refs/tags/vX.Y.Z` is empty and the
   `HEAD` subject is `chore(release): vX.Y.Z` → a previous run committed but did not ship. If a
   local tag exists (`git tag -l vX.Y.Z` non-empty, i.e. its push failed and no release exists),
