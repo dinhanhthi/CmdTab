@@ -12,6 +12,7 @@ enum Preferences {
     static let hideAnimationKey = "HideAnimation"
     static let iconVisibilityKey = "IconVisibility"
     static let enabledKey = "Enabled"
+    static let shrinkToFitKey = "ShrinkToFit"
 
     static var hotkeyModifier: HotkeyModifier { value(hotkeyModifierKey, default: .command) }
     static var screenScope: ScreenScope { value(screenScopeKey, default: .mouseScreen) }
@@ -24,6 +25,8 @@ enum Preferences {
         get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
+    /// On: the previews shrink when not all windows fit. On by default.
+    static var shrinkToFit: Bool { UserDefaults.standard.object(forKey: shrinkToFitKey) as? Bool ?? true }
 
     private static func value<Value: RawRepresentable>(_ key: String, default: Value) -> Value
     where Value.RawValue == String {

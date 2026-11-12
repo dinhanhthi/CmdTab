@@ -36,8 +36,8 @@ After a force quit, the system Cmd+Tab can stay off. Open CmdTab again and quit 
 ## Known limitations
 
 - Only windows on the current Space; minimized windows and hidden apps are skipped.
-- No scrolling: windows that do not fit on the panel are not shown.
-- CmdTab uses private APIs (`CGSSetSymbolicHotKeyEnabled`, `_AXUIElementGetWindow`, and SkyLight's `_SLPSSetFrontProcessWithOptions` and `SLPSPostEventRecordTo` to focus a window) that a macOS update may break.
+- No scrolling: when the windows do not fit, the previews shrink (down to 120 × 75 pt, see Settings > Appearance); windows that still do not fit are not shown.
+- CmdTab uses private APIs (`CGSSetSymbolicHotKeyEnabled`, `_AXUIElementGetWindow`, and SkyLight's `_SLPSSetFrontProcessWithOptions` and `SLPSPostEventRecordTo` to focus a window). A macOS update may break them, though this is rare.
 
 ## Build
 

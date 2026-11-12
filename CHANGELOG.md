@@ -4,6 +4,9 @@ All notable changes to CmdTab are listed here. `scripts/publish-release.sh` uses
 
 ## [Unreleased]
 
+### Added
+- When not all windows fit, the previews shrink so more of them show (Settings > Appearance > Shrink to fit, on by default).
+
 ## [0.1.1] - 2026-11-11
 
 ### Added

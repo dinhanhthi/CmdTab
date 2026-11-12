@@ -22,6 +22,8 @@ final class SwitcherView: NSView {
     private nonisolated static let titleHeight: CGFloat = 18
     /// The part of the screen's visible size the panel may take.
     private nonisolated static let screenShare: CGFloat = 0.9
+    /// The smallest thumbnail box "Shrink to fit" goes down to, in points.
+    nonisolated static let minimumThumbnail = CGSize(width: 120, height: 75)
     private static let titleSpacing: CGFloat = 3
     private static let fontSize: CGFloat = 11
     private static let cornerRadius: CGFloat = 8
@@ -97,6 +99,28 @@ final class SwitcherView: NSView {
             limit: CGSize(width: available.width * screenShare, height: available.height * screenShare))
     }
 
+    /// The thumbnail box that keeps all `count` tiles in `layout`: `preferred` when it does, else the first of
+    /// `preferred` x 0.95, 0.90, ... (whole points, aspect kept) that does. Never below `minimumThumbnail`: when no
+    /// step above it fits, `minimumThumbnail` (or `preferred` when that is already smaller). Pure arithmetic.
+    nonisolated static func fittingThumbnail(count: Int, preferred: CGSize, available: CGSize) -> CGSize {
+        func fits(_ box: CGSize) -> Bool {
+            layout(count: count, thumbnail: box, icon: 0, available: available).frames.count == count
+        }
+        guard !fits(preferred) else { return preferred }
+        // Steps of 5 %, counted in twentieths so no float error builds up.
+        var step = 19
+        while step > 0 {
+            let factor = CGFloat(step) / 20
+            let box = CGSize(
+                width: (preferred.width * factor).rounded(.down), height: (preferred.height * factor).rounded(.down))
+            guard box.width >= minimumThumbnail.width, box.height >= minimumThumbnail.height else { break }
+            if fits(box) { return box }
+            step -= 1
+        }
+        let belowMinimum = preferred.width < minimumThumbnail.width || preferred.height < minimumThumbnail.height
+        return belowMinimum ? preferred : minimumThumbnail
+    }
+
     private nonisolated static func tileSize(_ thumbnail: CGSize) -> CGSize {
         CGSize(width: thumbnail.width, height: thumbnail.height + titleHeight)
     }
@@ -133,9 +157,9 @@ final class SwitcherView: NSView {
 
     // MARK: Showing
 
-    /// Shows `tiles` (front to back) with `selected` highlighted. `thumbnail` is the box of `ThumbnailSize`,
-    /// `icon` the side of `AppIconSize`. Call it after `SwitcherPanel.place`: the tiles are laid out in the
-    /// panel's size and drawn at its screen's scale.
+    /// Shows `tiles` (front to back) with `selected` highlighted. `thumbnail` is the box of `ThumbnailSize` (maybe
+    /// shrunk to fit), `icon` the side of `AppIconSize` (shrunk with it). Call it after `SwitcherPanel.place`: the
+    /// tiles are laid out in the panel's size and drawn at its screen's scale.
     func show(tiles: [Tile], selected: Int, thumbnail: CGSize, icon: CGFloat) {
         frames = Self.arrange(count: tiles.count, tile: Self.tileSize(thumbnail), limit: window?.frame.size ?? bounds.size)
             .frames

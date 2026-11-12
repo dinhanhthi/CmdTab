@@ -36,6 +36,7 @@ struct SettingsSidebarView: View {
     @AppStorage(Preferences.thumbnailSizeKey) private var thumbnailSize: ThumbnailSize = .medium
     @AppStorage(Preferences.appIconSizeKey) private var appIconSize: AppIconSize = .medium
     @AppStorage(Preferences.hideAnimationKey) private var hideAnimation: HideAnimation = HideAnimation.none
+    @AppStorage(Preferences.shrinkToFitKey) private var shrinkToFit = true
     /// Sections opened so far: kept alive like TabView's tabs, so a section keeps its state (and its scroll) when
     /// the user comes back to it.
     @State private var opened: Set<SettingsSection> = []
@@ -167,6 +168,18 @@ struct SettingsSidebarView: View {
                 LabeledContent("Thumbnail size") { tabs($thumbnailSize, \.title) }
                 SettingsDivider()
                 LabeledContent("App icon size") { tabs($appIconSize, \.title) }
+                SettingsDivider()
+                LabeledContent {
+                    Toggle("Shrink to fit", isOn: $shrinkToFit)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Shrink to fit")
+                    hint("When not all windows fit, previews get smaller, down to "
+                        + "\(Int(SwitcherView.minimumThumbnail.width)) × "
+                        + "\(Int(SwitcherView.minimumThumbnail.height)) pt. "
+                        + "Windows that still do not fit are not shown.")
+                }
                 SettingsDivider()
                 LabeledContent("Hide animation") { tabs($hideAnimation, \.title) }
             }

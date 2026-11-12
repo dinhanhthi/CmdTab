@@ -37,8 +37,8 @@ final class SwitcherController {
     /// 64 entries or the screen scale changes.
     private var icons: [pid_t: CGImage] = [:]
     private var iconScale: CGFloat = 0
-    /// Window thumbnails, made at `thumbnailBox` x the panel screen's scale in a session, or the window's display
-    /// scale when prefetched; emptied when the box changes.
+    /// Window thumbnails, made at `thumbnailBox` (the preferred box, even when a session's box shrinks) x the panel
+    /// screen's scale in a session, or the window's display scale when prefetched; emptied when the box changes.
     private let thumbnails = ThumbnailCache()
     private var thumbnailBox: CGSize = .zero
     /// The selected tile while the panel shows: the capture order starts there.
@@ -209,9 +209,18 @@ final class SwitcherController {
             monitor.setSessionKeys(false)
             return
         }
-        // Only the windows the panel can draw: the session's indexes then always point at a drawn tile.
-        let thumbnail = Preferences.thumbnailSize.box
-        let icon = Preferences.appIconSize.side
+        // Only the windows the panel can draw: the session's indexes then always point at a drawn tile. With
+        // "Shrink to fit" the box (and the icon with it) first shrinks so more of them fit.
+        let preferred = Preferences.thumbnailSize.box
+        let preferredIcon = Preferences.appIconSize.side
+        var thumbnail = preferred
+        var icon = preferredIcon
+        if Preferences.shrinkToFit {
+            thumbnail = SwitcherView.fittingThumbnail(
+                count: list.count, preferred: preferred, available: screen.visibleFrame.size)
+            icon = thumbnail == preferred
+                ? preferredIcon : max(16, (preferredIcon * thumbnail.width / preferred.width).rounded())
+        }
         let fit = SwitcherView.layout(
             count: list.count, thumbnail: thumbnail, icon: icon, available: screen.visibleFrame.size)
         if fit.frames.count < list.count { list.removeLast(list.count - fit.frames.count) }
@@ -288,9 +297,11 @@ final class SwitcherController {
         guard let layout else { return }
         let panel = self.panel ?? makePanel()
         let scale = layout.screen.backingScaleFactor
-        // An image of another scale (prefetched, or from a session on another screen) shows aspect-fit in the box.
-        if layout.thumbnail != thumbnailBox { thumbnails.removeAll() }
-        thumbnailBox = layout.thumbnail
+        // Thumbnails are made at the preferred box, even when the session's box shrank. An image of another size
+        // (shrunk box, prefetched, or from a session on another screen) shows aspect-fit in the box.
+        let box = Preferences.thumbnailSize.box
+        if box != thumbnailBox { thumbnails.removeAll() }
+        thumbnailBox = box
         let tiles = list.map { window in
             SwitcherView.Tile(
                 id: window.id, title: window.title ?? window.ownerName,
