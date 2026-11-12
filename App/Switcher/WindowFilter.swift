@@ -18,7 +18,8 @@ enum ScreenScope: String, CaseIterable, Sendable {
 }
 
 /// Why a listed window is (or is not) off screen: `normal` on screen, `hidden` off screen with its app hidden (a
-/// minimized window of a hidden app counts as hidden), else `minimized`. The switcher draws a badge for the last two.
+/// minimized window of a hidden app counts as hidden), else `minimized`. The switcher shows the last two as a card
+/// with a symbol and a label.
 enum WindowState: Sendable {
     case normal, minimized, hidden
 }

@@ -2,7 +2,8 @@ import AppKit
 
 /// The switcher's content: one layer-backed view that draws the window tiles as sublayers and moves one
 /// highlight behind the selected tile. Created once with the panel and kept: the tile layers come from a
-/// grow-only pool, and a show only sets `contents`, `string`, `frame` and `isHidden` with layer actions disabled.
+/// grow-only pool, and a show only sets `contents`, `string`, `frame`, `isHidden` and the card fill with layer
+/// actions disabled.
 /// Window titles are untrusted text: shown as plain strings, never parsed or logged.
 final class SwitcherView: NSView {
     struct Tile {
@@ -10,7 +11,7 @@ final class SwitcherView: NSView {
         let title: String
         let icon: CGImage?
         let thumbnail: CGImage?
-        /// Not `normal`: a badge at the box's top-left says the window is minimized or its app hidden.
+        /// Not `normal`: no window image, but a filled card with the state's symbol and "Minimized" or "Hidden".
         let state: WindowState
     }
 
@@ -30,17 +31,24 @@ final class SwitcherView: NSView {
     private static let fontSize: CGFloat = 11
     private static let cornerRadius: CGFloat = 8
     private static let highlightInset: CGFloat = 6
-    /// The side of the app icon that stands in for a missing thumbnail.
+    /// The side of the app icon that stands in for a missing thumbnail on a `normal` tile.
     private static let placeholderSide: CGFloat = 64
     /// The side the badge images are rendered at, in points: above any badge side, so they only scale down.
     private static let badgeImageSide: CGFloat = 48
+    /// The largest side of the state symbol at the centre of a minimized or hidden tile's card.
+    private static let badgeSide: CGFloat = 32
+    /// The state label under that symbol, and the space between them.
+    private static let stateLabelHeight: CGFloat = 14
+    private static let stateLabelSpacing: CGFloat = 4
 
-    /// The layers of one pooled tile; `thumbnail`, `icon`, `badge` and `title` sit in `container`, in its coordinates.
+    /// The layers of one pooled tile; `thumbnail`, `icon`, `badge`, `stateLabel` and `title` sit in `container`, in
+    /// its coordinates. `badge` and `stateLabel` show only on a minimized or hidden tile, centred on its card.
     private struct TileLayers {
         let container = CALayer()
         let thumbnail = CALayer()
         let icon = CALayer()
         let badge = CALayer()
+        let stateLabel = CATextLayer()
         let title = CATextLayer()
     }
 
@@ -53,7 +61,7 @@ final class SwitcherView: NSView {
     private var iconSide: CGFloat = 0
     /// The contents scale of every pooled layer.
     private var scale: CGFloat = 0
-    /// The badge image of each non-`normal` state, rendered once at `badgeImageSide` x `scale`; emptied when `scale`
+    /// The symbol image of each non-`normal` state, rendered once at `badgeImageSide` x `scale`; emptied when `scale`
     /// changes.
     private var badges: [WindowState: CGImage] = [:]
     /// The tile under the pointer at the last `mouseMoved`.
@@ -88,7 +96,14 @@ final class SwitcherView: NSView {
         highlight.backgroundColor = accent.withAlphaComponent(0.3).cgColor
         highlight.borderColor = accent.cgColor
         let text = NSColor.labelColor.cgColor
-        for layers in pool { layers.title.foregroundColor = text }
+        let secondaryText = NSColor.secondaryLabelColor.cgColor
+        let card = Self.cardColor
+        for (index, layers) in pool.enumerated() {
+            layers.title.foregroundColor = text
+            layers.stateLabel.foregroundColor = secondaryText
+            let isCard = index < tiles.count && tiles[index].state != .normal
+            layers.thumbnail.backgroundColor = isCard ? card : nil
+        }
         CATransaction.commit()
     }
 
@@ -230,6 +245,11 @@ final class SwitcherView: NSView {
             layers.thumbnail.masksToBounds = true
             layers.icon.contentsGravity = .resizeAspect
             layers.badge.contentsGravity = .resizeAspect
+            layers.stateLabel.font = NSFont.systemFont(ofSize: Self.fontSize)
+            layers.stateLabel.fontSize = Self.fontSize
+            layers.stateLabel.alignmentMode = .center
+            layers.stateLabel.truncationMode = .end
+            layers.stateLabel.isWrapped = false
             layers.title.font = NSFont.systemFont(ofSize: Self.fontSize)
             layers.title.fontSize = Self.fontSize
             layers.title.alignmentMode = .center
@@ -238,6 +258,7 @@ final class SwitcherView: NSView {
             layers.container.addSublayer(layers.thumbnail)
             layers.container.addSublayer(layers.icon)
             layers.container.addSublayer(layers.badge)
+            layers.container.addSublayer(layers.stateLabel)
             layers.container.addSublayer(layers.title)
             setScale(of: layers)
             layer?.addSublayer(layers.container)
@@ -250,46 +271,77 @@ final class SwitcherView: NSView {
         layers.thumbnail.contentsScale = scale
         layers.icon.contentsScale = scale
         layers.badge.contentsScale = scale
+        layers.stateLabel.contentsScale = scale
         layers.title.contentsScale = scale
     }
 
     /// Sets one tile's images, title and the frames inside it. Call it with layer actions disabled.
     private func fill(_ layers: TileLayers, with tile: Tile) {
         let box = CGRect(origin: .zero, size: thumbnailBox)
-        if let thumbnail = tile.thumbnail {
-            layers.thumbnail.frame = box
-            layers.thumbnail.contents = thumbnail
+        if tile.state != .normal {
+            fillCard(layers, state: tile.state, box: box)
             layers.icon.contents = tile.icon
             layers.icon.isHidden = tile.icon == nil
         } else {
-            // No thumbnail: the app icon, centred at 64 pt, stands in for it, and the corner icon goes.
-            let side = min(Self.placeholderSide, box.width, box.height)
-            layers.thumbnail.frame = CGRect(x: box.midX - side / 2, y: box.midY - side / 2, width: side, height: side)
-            layers.thumbnail.contents = tile.icon
-            layers.icon.isHidden = true
+            layers.thumbnail.backgroundColor = nil
+            layers.badge.isHidden = true
+            layers.stateLabel.isHidden = true
+            if let thumbnail = tile.thumbnail {
+                layers.thumbnail.frame = box
+                layers.thumbnail.contents = thumbnail
+                layers.icon.contents = tile.icon
+                layers.icon.isHidden = tile.icon == nil
+            } else {
+                // No thumbnail: the app icon, centred at 64 pt, stands in for it, and the corner icon goes.
+                let side = min(Self.placeholderSide, box.width, box.height)
+                layers.thumbnail.frame = CGRect(
+                    x: box.midX - side / 2, y: box.midY - side / 2, width: side, height: side)
+                layers.thumbnail.contents = tile.icon
+                layers.icon.isHidden = true
+            }
         }
         // Bottom-right, three quarters on the box and a quarter over its right and bottom edges.
         let overhang = iconSide / 4
         layers.icon.frame = CGRect(
             x: box.maxX - iconSide + overhang, y: box.maxY - iconSide + overhang, width: iconSide, height: iconSide)
-        // Top-left, with the box and not the thumbnail (an off-screen window mostly has none): the corner icon's
-        // mirror, a quarter over the box's left and top edges.
-        if tile.state == .normal {
-            layers.badge.isHidden = true
-        } else {
-            let badgeSide = max(14, (iconSide * 0.6).rounded())
-            let badgeOverhang = (badgeSide / 4).rounded()
-            layers.badge.contents = badgeImage(for: tile.state)
-            layers.badge.frame = CGRect(x: -badgeOverhang, y: -badgeOverhang, width: badgeSide, height: badgeSide)
-            layers.badge.isHidden = false
-        }
         layers.title.frame = CGRect(
             x: 0, y: box.maxY + Self.titleSpacing, width: box.width, height: Self.titleHeight - Self.titleSpacing)
         if layers.title.string as? String != tile.title { layers.title.string = tile.title }
     }
 
-    /// The badge of `state` (nil for `normal`): its SF Symbol, a white glyph on a black circle at 0.6 alpha, the same
-    /// in light and dark mode. Rendered on the first tile that needs it, then cached.
+    /// A minimized or hidden tile's box: no window image but a card in a subtle fill, the thumbnails' shape, with the
+    /// state's symbol and "Minimized" or "Hidden" under it, the pair centred. The symbol is about a third of the box's
+    /// height, at most `badgeSide`, so the pair still fits the smallest box "Shrink to fit" gives.
+    private func fillCard(_ layers: TileLayers, state: WindowState, box: CGRect) {
+        layers.thumbnail.frame = box
+        layers.thumbnail.contents = nil
+        layers.thumbnail.backgroundColor = cardColorForAppearance()
+        let labelHeight = Self.stateLabelHeight
+        let room = box.height - Self.stateLabelSpacing - labelHeight
+        let side = max(0, min(Self.badgeSide, (box.height * 0.35).rounded(), room.rounded(.down), box.width))
+        let top = (box.midY - (side + Self.stateLabelSpacing + labelHeight) / 2).rounded()
+        layers.badge.contents = badgeImage(for: state)
+        layers.badge.frame = CGRect(x: (box.midX - side / 2).rounded(), y: top, width: side, height: side)
+        layers.badge.isHidden = false
+        layers.stateLabel.frame = CGRect(
+            x: 0, y: top + side + Self.stateLabelSpacing, width: box.width, height: labelHeight)
+        let label = state == .minimized ? "Minimized" : "Hidden"
+        if layers.stateLabel.string as? String != label { layers.stateLabel.string = label }
+        layers.stateLabel.isHidden = false
+    }
+
+    /// The card fill of minimized and hidden tiles, resolved for the current appearance (call it in `updateLayer`).
+    private static var cardColor: CGColor { NSColor.quaternaryLabelColor.cgColor }
+
+    /// `cardColor` resolved for the view's appearance, outside `updateLayer`.
+    private func cardColorForAppearance() -> CGColor {
+        var color = Self.cardColor
+        effectiveAppearance.performAsCurrentDrawingAppearance { color = Self.cardColor }
+        return color
+    }
+
+    /// The symbol of `state` (nil for `normal`), centred on its tile's card: its SF Symbol, a white glyph on a black
+    /// circle at 0.6 alpha, the same in light and dark mode. Rendered on the first tile that needs it, then cached.
     private func badgeImage(for state: WindowState) -> CGImage? {
         if let image = badges[state] { return image }
         let name: String

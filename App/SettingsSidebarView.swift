@@ -162,7 +162,7 @@ struct SettingsSidebarView: View {
                         .labelsHidden()
                 } label: {
                     Text("Show windows of hidden apps")
-                    hint("Listed after the other windows, with a badge.")
+                    hint("Listed after the other windows, marked Minimized or Hidden.")
                 }
                 SettingsDivider()
                 LabeledContent {

@@ -18,7 +18,7 @@ CmdTab is a small menu bar app that replaces the system Cmd+Tab with a switcher 
 ## Features
 
 - One entry per window, with thumbnails, app icons and titles.
-- Optionally, minimized windows and the windows of hidden apps, with a badge.
+- Optionally, minimized windows and the windows of hidden apps, marked "Minimized" or "Hidden".
 - A quick tap switches to the previous window at once.
 - Tab / Shift+Tab, arrows or the mouse to pick; release to switch, Escape to cancel.
 - Hotkey ⌘ Tab, ⌥ Tab or ⌃ Tab. Windows from the screen under the pointer or all screens.
