@@ -10,6 +10,8 @@ final class SwitcherView: NSView {
         let title: String
         let icon: CGImage?
         let thumbnail: CGImage?
+        /// Not `normal`: a badge at the box's top-left says the window is minimized or its app hidden.
+        let state: WindowState
     }
 
     var onHover: ((Int) -> Void)?
@@ -30,12 +32,15 @@ final class SwitcherView: NSView {
     private static let highlightInset: CGFloat = 6
     /// The side of the app icon that stands in for a missing thumbnail.
     private static let placeholderSide: CGFloat = 64
+    /// The side the badge images are rendered at, in points: above any badge side, so they only scale down.
+    private static let badgeImageSide: CGFloat = 48
 
-    /// The layers of one pooled tile; `thumbnail`, `icon` and `title` sit in `container`, in its coordinates.
+    /// The layers of one pooled tile; `thumbnail`, `icon`, `badge` and `title` sit in `container`, in its coordinates.
     private struct TileLayers {
         let container = CALayer()
         let thumbnail = CALayer()
         let icon = CALayer()
+        let badge = CALayer()
         let title = CATextLayer()
     }
 
@@ -48,6 +53,9 @@ final class SwitcherView: NSView {
     private var iconSide: CGFloat = 0
     /// The contents scale of every pooled layer.
     private var scale: CGFloat = 0
+    /// The badge image of each non-`normal` state, rendered once at `badgeImageSide` x `scale`; emptied when `scale`
+    /// changes.
+    private var badges: [WindowState: CGImage] = [:]
     /// The tile under the pointer at the last `mouseMoved`.
     private var hovered: Int?
 
@@ -157,9 +165,9 @@ final class SwitcherView: NSView {
 
     // MARK: Showing
 
-    /// Shows `tiles` (front to back) with `selected` highlighted. `thumbnail` is the box of `ThumbnailSize` (maybe
-    /// shrunk to fit), `icon` the side of `AppIconSize` (shrunk with it). Call it after `SwitcherPanel.place`: the
-    /// tiles are laid out in the panel's size and drawn at its screen's scale.
+    /// Shows `tiles` (on-screen front to back, then off-screen) with `selected` highlighted. `thumbnail` is the box of
+    /// `ThumbnailSize` (maybe shrunk to fit), `icon` the side of `AppIconSize` (shrunk with it). Call it after
+    /// `SwitcherPanel.place`: the tiles are laid out in the panel's size and drawn at its screen's scale.
     func show(tiles: [Tile], selected: Int, thumbnail: CGSize, icon: CGFloat) {
         frames = Self.arrange(count: tiles.count, tile: Self.tileSize(thumbnail), limit: window?.frame.size ?? bounds.size)
             .frames
@@ -173,6 +181,7 @@ final class SwitcherView: NSView {
         let backingScale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         if backingScale != scale {
             scale = backingScale
+            badges.removeAll()
             for layers in pool { setScale(of: layers) }
         }
         if pool.count < self.tiles.count { grow(to: self.tiles.count) }
@@ -204,7 +213,7 @@ final class SwitcherView: NSView {
     func setThumbnail(_ image: CGImage, for id: CGWindowID) {
         guard let index = tiles.firstIndex(where: { $0.id == id }) else { return }
         let tile = tiles[index]
-        tiles[index] = Tile(id: tile.id, title: tile.title, icon: tile.icon, thumbnail: image)
+        tiles[index] = Tile(id: tile.id, title: tile.title, icon: tile.icon, thumbnail: image, state: tile.state)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         fill(pool[index], with: tiles[index])
@@ -220,6 +229,7 @@ final class SwitcherView: NSView {
             layers.thumbnail.cornerCurve = .continuous
             layers.thumbnail.masksToBounds = true
             layers.icon.contentsGravity = .resizeAspect
+            layers.badge.contentsGravity = .resizeAspect
             layers.title.font = NSFont.systemFont(ofSize: Self.fontSize)
             layers.title.fontSize = Self.fontSize
             layers.title.alignmentMode = .center
@@ -227,6 +237,7 @@ final class SwitcherView: NSView {
             layers.title.isWrapped = false
             layers.container.addSublayer(layers.thumbnail)
             layers.container.addSublayer(layers.icon)
+            layers.container.addSublayer(layers.badge)
             layers.container.addSublayer(layers.title)
             setScale(of: layers)
             layer?.addSublayer(layers.container)
@@ -238,6 +249,7 @@ final class SwitcherView: NSView {
     private func setScale(of layers: TileLayers) {
         layers.thumbnail.contentsScale = scale
         layers.icon.contentsScale = scale
+        layers.badge.contentsScale = scale
         layers.title.contentsScale = scale
     }
 
@@ -260,9 +272,48 @@ final class SwitcherView: NSView {
         let overhang = iconSide / 4
         layers.icon.frame = CGRect(
             x: box.maxX - iconSide + overhang, y: box.maxY - iconSide + overhang, width: iconSide, height: iconSide)
+        // Top-left, with the box and not the thumbnail (an off-screen window mostly has none): the corner icon's
+        // mirror, a quarter over the box's left and top edges.
+        if tile.state == .normal {
+            layers.badge.isHidden = true
+        } else {
+            let badgeSide = max(14, (iconSide * 0.6).rounded())
+            let badgeOverhang = (badgeSide / 4).rounded()
+            layers.badge.contents = badgeImage(for: tile.state)
+            layers.badge.frame = CGRect(x: -badgeOverhang, y: -badgeOverhang, width: badgeSide, height: badgeSide)
+            layers.badge.isHidden = false
+        }
         layers.title.frame = CGRect(
             x: 0, y: box.maxY + Self.titleSpacing, width: box.width, height: Self.titleHeight - Self.titleSpacing)
         if layers.title.string as? String != tile.title { layers.title.string = tile.title }
+    }
+
+    /// The badge of `state` (nil for `normal`): its SF Symbol, a white glyph on a black circle at 0.6 alpha, the same
+    /// in light and dark mode. Rendered on the first tile that needs it, then cached.
+    private func badgeImage(for state: WindowState) -> CGImage? {
+        if let image = badges[state] { return image }
+        let name: String
+        switch state {
+        case .normal: return nil
+        case .minimized: name = "minus.circle.fill"
+        case .hidden: name = "eye.slash.circle.fill"
+        }
+        // Palette order is the symbol's layers: the glyph first, then the circle.
+        let config = NSImage.SymbolConfiguration(pointSize: Self.badgeImageSide, weight: .semibold)
+            .applying(.init(paletteColors: [.white, NSColor.black.withAlphaComponent(0.6)]))
+        let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config)
+        guard let symbol, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let pixels = Int((Self.badgeImageSide * scale).rounded())
+        guard let context = CGContext(
+            data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        symbol.draw(in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+        NSGraphicsContext.restoreGraphicsState()
+        guard let image = context.makeImage() else { return nil }
+        badges[state] = image
+        return image
     }
 
     // MARK: Mouse

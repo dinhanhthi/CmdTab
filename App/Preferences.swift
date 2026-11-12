@@ -13,6 +13,8 @@ enum Preferences {
     static let iconVisibilityKey = "IconVisibility"
     static let enabledKey = "Enabled"
     static let shrinkToFitKey = "ShrinkToFit"
+    static let showMinimizedKey = "ShowMinimized"
+    static let showHiddenAppsKey = "ShowHiddenApps"
 
     static var hotkeyModifier: HotkeyModifier { value(hotkeyModifierKey, default: .command) }
     static var screenScope: ScreenScope { value(screenScopeKey, default: .mouseScreen) }
@@ -27,6 +29,10 @@ enum Preferences {
     }
     /// On: the previews shrink when not all windows fit. On by default.
     static var shrinkToFit: Bool { UserDefaults.standard.object(forKey: shrinkToFitKey) as? Bool ?? true }
+    /// On: the switcher also lists minimized windows. Off by default.
+    static var showMinimized: Bool { UserDefaults.standard.object(forKey: showMinimizedKey) as? Bool ?? false }
+    /// On: the switcher also lists the windows of hidden apps. Off by default.
+    static var showHiddenApps: Bool { UserDefaults.standard.object(forKey: showHiddenAppsKey) as? Bool ?? false }
 
     private static func value<Value: RawRepresentable>(_ key: String, default: Value) -> Value
     where Value.RawValue == String {

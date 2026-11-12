@@ -1,20 +1,22 @@
 import AppKit
 
-/// Reads what a switching session starts from: the on-screen windows, the regular apps, the displays and
-/// the mouse. It runs on the main thread at hotkey time, so it makes only these WindowServer and workspace
-/// reads: no Accessibility call, and no filtering (that is `WindowFilter`).
+/// Reads what a switching session starts from: the windows (on-screen only, or also off-screen), the regular
+/// and hidden apps, the displays and the mouse. It runs on the main thread at hotkey time, so it makes only these
+/// WindowServer and workspace reads: no Accessibility call, and no filtering (that is `WindowFilter`).
 enum WindowSource {
-    /// `all` is front to back. `displays` and `mouse` share the windows' global top-left space.
-    /// `mouseDisplay` is the display under the mouse: the first one when the mouse is on none,
-    /// as in `WindowFilter.list`.
+    /// `all` is front to back; with `includeOffScreen` it also holds the off-screen windows (minimized, of hidden
+    /// apps, on other Spaces), each with `isOnScreen` false. `hiddenPIDs` are the regular apps that are hidden.
+    /// `displays` and `mouse` share the windows' global top-left space. `mouseDisplay` is the display under the
+    /// mouse: the first one when the mouse is on none, as in `WindowFilter.list`.
     @MainActor
-    static func snapshot() -> (
-        all: [WindowSnapshot], regularPIDs: Set<pid_t>, frontmostPID: pid_t?, displays: [CGRect], mouse: CGPoint,
-        mouseDisplay: CGDirectDisplayID
+    static func snapshot(includeOffScreen: Bool = false) -> (
+        all: [WindowSnapshot], regularPIDs: Set<pid_t>, hiddenPIDs: Set<pid_t>, frontmostPID: pid_t?,
+        displays: [CGRect], mouse: CGPoint, mouseDisplay: CGDirectDisplayID
     ) {
         let workspace = NSWorkspace.shared
-        let regularPIDs = Set(
-            workspace.runningApplications.filter { $0.activationPolicy == .regular }.map(\.processIdentifier))
+        let regularApps = workspace.runningApplications.filter { $0.activationPolicy == .regular }
+        let regularPIDs = Set(regularApps.map(\.processIdentifier))
+        let hiddenPIDs = Set(regularApps.filter(\.isHidden).map(\.processIdentifier))
 
         var displayIDs = [CGDirectDisplayID](repeating: 0, count: 16)
         var displayCount: UInt32 = 0
@@ -29,13 +31,16 @@ enum WindowSource {
             displayIDs.isEmpty ? CGMainDisplayID() : displayIDs[displays.firstIndex { $0.contains(mouse) } ?? 0]
 
         return (
-            windows(), regularPIDs, workspace.frontmostApplication?.processIdentifier, displays, mouse, mouseDisplay
+            windows(includeOffScreen: includeOffScreen), regularPIDs, hiddenPIDs,
+            workspace.frontmostApplication?.processIdentifier, displays, mouse, mouseDisplay
         )
     }
 
-    /// Every on-screen window, front to back. An entry without one of the keys the filter needs is skipped.
-    private static func windows() -> [WindowSnapshot] {
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    /// Every on-screen window, front to back, and with `includeOffScreen` the off-screen ones too. An entry without
+    /// one of the keys the filter needs is skipped.
+    private static func windows(includeOffScreen: Bool) -> [WindowSnapshot] {
+        let options: CGWindowListOption =
+            includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly, .excludeDesktopElements]
         guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return [] }
         return list.compactMap { info in
             guard let id = info[kCGWindowNumber as String] as? CGWindowID,
@@ -48,7 +53,8 @@ enum WindowSource {
             let title = info[kCGWindowName as String] as? String
             return WindowSnapshot(
                 id: id, pid: pid, ownerName: info[kCGWindowOwnerName as String] as? String ?? "",
-                title: title?.isEmpty == false ? title : nil, bounds: bounds, layer: layer, alpha: alpha)
+                title: title?.isEmpty == false ? title : nil, bounds: bounds, layer: layer, alpha: alpha,
+                isOnScreen: !includeOffScreen || info[kCGWindowIsOnscreen as String] as? Bool ?? false)
         }
     }
 }

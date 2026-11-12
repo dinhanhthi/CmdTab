@@ -37,6 +37,8 @@ struct SettingsSidebarView: View {
     @AppStorage(Preferences.appIconSizeKey) private var appIconSize: AppIconSize = .medium
     @AppStorage(Preferences.hideAnimationKey) private var hideAnimation: HideAnimation = HideAnimation.none
     @AppStorage(Preferences.shrinkToFitKey) private var shrinkToFit = true
+    @AppStorage(Preferences.showMinimizedKey) private var showMinimized = false
+    @AppStorage(Preferences.showHiddenAppsKey) private var showHiddenApps = false
     /// Sections opened so far: kept alive like TabView's tabs, so a section keeps its state (and its scroll) when
     /// the user comes back to it.
     @State private var opened: Set<SettingsSection> = []
@@ -147,6 +149,21 @@ struct SettingsSidebarView: View {
                 }
                 SettingsDivider()
                 LabeledContent("Show windows from") { tabs($screenScope, \.title) }
+                SettingsDivider()
+                LabeledContent("Show minimized windows") {
+                    Toggle("Show minimized windows", isOn: $showMinimized)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                }
+                SettingsDivider()
+                LabeledContent {
+                    Toggle("Show windows of hidden apps", isOn: $showHiddenApps)
+                        .toggleStyle(CompactSwitch())
+                        .labelsHidden()
+                } label: {
+                    Text("Show windows of hidden apps")
+                    hint("Listed after the other windows, with a badge.")
+                }
                 SettingsDivider()
                 LabeledContent {
                     tabs($iconVisibility, \.title)

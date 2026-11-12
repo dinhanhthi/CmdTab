@@ -2,26 +2,31 @@ import AppKit
 
 /// Runs the switcher: a hotkey press reads the windows and starts a `SwitcherSession`, a hold shows the
 /// panel, the release of the modifier commits it, and a commit focuses the chosen window. Between sessions the
-/// only work is event-driven: a one-off background thumbnail capture when the switcher starts, and nothing periodic
-/// (no timer, no polling, no animation); what is left is the Carbon hotkeys, two workspace observers (an app
-/// activation refreshes the window classifier and has it watch that app, an app that quits is forgotten) and the
-/// classifier's Accessibility observer of the frontmost app.
+/// only work is event-driven: a one-off classifier refresh of every app and background thumbnail capture when the
+/// switcher starts, and nothing periodic (no timer, no polling, no animation); what is left is the Carbon hotkeys,
+/// four workspace observers (an app activation refreshes the window classifier and has it watch that app, an app
+/// that hides is refreshed, a Space switch refreshes every app the classifier knows, an app that quits is
+/// forgotten) and the classifier's Accessibility observer of the frontmost app.
 @MainActor
 final class SwitcherController {
     private let monitor = HotkeyMonitor()
     /// Created once, when Accessibility is granted, and kept for the life of the process.
     private var watcher: ModifierWatcher?
     private var session = SwitcherSession()
-    /// The windows of the current session, front to back. The session's indexes point into it.
+    /// The windows of the current session: the on-screen ones front to back, then the listed off-screen ones. The
+    /// session's indexes point into it.
     private var list: [WindowSnapshot] = []
+    /// The hidden regular apps at the session's press: with `list`, they give each tile its `WindowState`.
+    private var hiddenPIDs: Set<pid_t> = []
     /// Fires 100 ms after the press, when the modifier is still held. It exists only while a session is pending.
     private var holdTimer: DispatchWorkItem?
     private var armedModifier: HotkeyModifier?  // nil = the hotkeys are not taken
     /// Exists only while the hotkeys could not be taken.
     private var activeObserver: NSObjectProtocol?
-    /// Tells sheets from real windows. Refreshed on an app activation, when the frontmost app creates a window or a
-    /// sheet, and at the end of a session that listed unknown windows; an app that quits is forgotten. Both workspace
-    /// observers and the frontmost app's watch live from `start` to `stop`.
+    /// Tells sheets from real windows and knows minimized ones. Refreshed for every regular app at `start`, then on
+    /// an app activation, an app hide, a Space switch, when the frontmost app creates a window or a sheet or minimizes
+    /// or restores a window, and at the end of a session that listed unknown windows; an app that quits is forgotten.
+    /// The workspace observers and the frontmost app's watch live from `start` to `stop`.
     private let classifier = AXWindowClassifier()
     private var workspaceObservers: [NSObjectProtocol] = []
 
@@ -55,6 +60,13 @@ final class SwitcherController {
         observeWorkspace()
         if let app = NSWorkspace.shared.frontmostApplication, app.activationPolicy == .regular {
             classifier.watch(pid: app.processIdentifier)
+        }
+        // Every app running before CmdTab started: without an activation or a hide, its hidden and minimized windows
+        // would stay unknown.
+        if let byPID = AXWindowClassifier.onScreenIDsByPID() {
+            for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
+                classifier.refresh(pid: app.processIdentifier, onScreenIDs: byPID[app.processIdentifier] ?? [])
+            }
         }
         // The first press on any screen finds thumbnails: the frontmost windows of all screens, as many as fit.
         if CGPreflightScreenCaptureAccess() {
@@ -148,7 +160,28 @@ final class SwitcherController {
                 guard let pid = (note.userInfo?[key] as? NSRunningApplication)?.processIdentifier else { return }
                 MainActor.assumeIsolated { self?.classifier.forget(pid: pid) }
             },
+            // A hidden app has no on-screen window; Accessibility still lists its windows.
+            center.addObserver(forName: NSWorkspace.didHideApplicationNotification, object: nil, queue: .main) {
+                [weak self] note in
+                guard let app = note.userInfo?[key] as? NSRunningApplication, app.activationPolicy == .regular
+                else { return }
+                let pid = app.processIdentifier
+                MainActor.assumeIsolated { self?.classifier.refresh(pid: pid, onScreenIDs: []) }
+            },
+            center.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) {
+                [weak self] _ in
+                MainActor.assumeIsolated { self?.classifySpace() }
+            },
         ]
+    }
+
+    /// The Space changed: one WindowServer read, then a refresh off-main of every app the classifier knows, so the
+    /// windows of the Space left behind go. An app with no on-screen window here gets an empty `onScreenIDs`.
+    private func classifySpace() {
+        guard let byPID = AXWindowClassifier.onScreenIDsByPID() else { return }
+        for pid in classifier.knownPIDs() {
+            classifier.refresh(pid: pid, onScreenIDs: byPID[pid] ?? [])
+        }
     }
 
     /// An app came forward: one WindowServer read for its on-screen layer-0 windows, then a refresh off-main.
@@ -185,8 +218,8 @@ final class SwitcherController {
 
     // MARK: Session
 
-    /// The hotkey was pressed while idle. Main thread: only the window list, the screen, the pure filter and layout
-    /// arithmetic, and the session.
+    /// The hotkey was pressed while idle. Main thread: only the window list, two settings, the screen, the pure filter
+    /// and layout arithmetic, and the session.
     private func beginSession(reverse: Bool) {
         let press = Perf.begin("press")
         defer { Perf.end(press) }
@@ -194,10 +227,15 @@ final class SwitcherController {
         // Trust can be taken away while the app runs: without it the Dock gets its switcher back.
         guard AXIsProcessTrusted(), let watcher, let armedModifier else { return disarmAndWait() }
 
-        let snapshot = WindowSource.snapshot()
+        // Off-screen windows are read only when one of the two settings lists some.
+        let showMinimized = Preferences.showMinimized, showHidden = Preferences.showHiddenApps
+        let snapshot = WindowSource.snapshot(includeOffScreen: showMinimized || showHidden)
+        hiddenPIDs = snapshot.hiddenPIDs
         list = WindowFilter.list(
             all: snapshot.all, regularPIDs: snapshot.regularPIDs, displays: snapshot.displays, mouse: snapshot.mouse,
-            scope: Preferences.screenScope, isSwitchable: classifier.isSwitchable)
+            scope: Preferences.screenScope, isSwitchable: classifier.isSwitchable, hiddenPIDs: snapshot.hiddenPIDs,
+            showMinimized: showMinimized, showHidden: showHidden, isMinimized: classifier.isMinimized,
+            isKnownWindow: classifier.isKnownWindow)
         let screen =
             NSScreen.screens.first {
                 ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
@@ -253,7 +291,9 @@ final class SwitcherController {
     }
 
     /// Everything that exists only during a session goes: the hold timer, the thumbnail capture, the release
-    /// detector, the session keys. The apps whose listed windows the classifier did not know yet are refreshed.
+    /// detector, the session keys. The apps whose listed windows the classifier did not know yet are refreshed, each
+    /// with all of its on-screen windows (not only the listed ones: a refresh replaces the app's entries), from one
+    /// WindowServer read made only when there is such an app.
     private func endSession() {
         holdTimer?.cancel()
         holdTimer = nil
@@ -261,8 +301,9 @@ final class SwitcherController {
         watcher?.end()
         monitor.setSessionKeys(false)
         let unknown = Set(list.filter { !classifier.knows($0.id) }.map(\.pid))
+        guard !unknown.isEmpty, let byPID = AXWindowClassifier.onScreenIDsByPID() else { return }
         for pid in unknown {
-            classifier.refresh(pid: pid, onScreenIDs: list.filter { $0.pid == pid }.map(\.id))
+            classifier.refresh(pid: pid, onScreenIDs: byPID[pid] ?? [])
         }
     }
 
@@ -272,7 +313,12 @@ final class SwitcherController {
             case .commit(let index):
                 endSession()
                 // Focus first, then the hide. An index outside the list is dropped.
-                if list.indices.contains(index) { WindowFocus.focus(windowID: list[index].id, pid: list[index].pid) }
+                if list.indices.contains(index) {
+                    let window = list[index]
+                    WindowFocus.focus(
+                        windowID: window.id, pid: window.pid,
+                        restore: WindowFilter.state(of: window, hiddenPIDs: hiddenPIDs) != .normal)
+                }
                 hidePanel()
             case .cancel:
                 endSession()
@@ -305,7 +351,8 @@ final class SwitcherController {
         let tiles = list.map { window in
             SwitcherView.Tile(
                 id: window.id, title: window.title ?? window.ownerName,
-                icon: icon(for: window.pid, side: max(layout.icon, 64), scale: scale), thumbnail: thumbnails[window.id])
+                icon: icon(for: window.pid, side: max(layout.icon, 64), scale: scale), thumbnail: thumbnails[window.id],
+                state: WindowFilter.state(of: window, hiddenPIDs: hiddenPIDs))
         }
         selectedIndex = selected
 
@@ -342,7 +389,8 @@ final class SwitcherController {
         let tiles = list.map { window in
             SwitcherView.Tile(
                 id: window.id, title: window.title ?? window.ownerName,
-                icon: icon(for: window.pid, side: max(layout.icon, 64), scale: scale), thumbnail: nil)
+                icon: icon(for: window.pid, side: max(layout.icon, 64), scale: scale), thumbnail: nil,
+                state: WindowFilter.state(of: window, hiddenPIDs: hiddenPIDs))
         }
         panel.place(size: layout.panelSize, centredIn: layout.screen.visibleFrame)
         panel.switcherView.show(tiles: tiles, selected: 0, thumbnail: layout.thumbnail, icon: layout.icon)

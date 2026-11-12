@@ -18,6 +18,7 @@ CmdTab is a small menu bar app that replaces the system Cmd+Tab with a switcher 
 ## Features
 
 - One entry per window, with thumbnails, app icons and titles.
+- Optionally, minimized windows and the windows of hidden apps, with a badge.
 - A quick tap switches to the previous window at once.
 - Tab / Shift+Tab, arrows or the mouse to pick; release to switch, Escape to cancel.
 - Hotkey ⌘ Tab, ⌥ Tab or ⌃ Tab. Windows from the screen under the pointer or all screens.
@@ -35,7 +36,7 @@ After a force quit, the system Cmd+Tab can stay off. Open CmdTab again and quit 
 
 ## Known limitations
 
-- Only windows on the current Space; minimized windows and hidden apps are skipped.
+- Only windows on the current Space. Minimized windows and hidden apps are skipped unless turned on in Settings > General.
 - No scrolling: when the windows do not fit, the previews shrink (down to 120 × 75 pt, see Settings > Appearance); windows that still do not fit are not shown.
 - CmdTab uses private APIs (`CGSSetSymbolicHotKeyEnabled`, `_AXUIElementGetWindow`, and SkyLight's `_SLPSSetFrontProcessWithOptions` and `SLPSPostEventRecordTo` to focus a window). A macOS update may break them, though this is rare.
 

@@ -4,16 +4,19 @@ import AppKit
 /// by an app that is not active (CmdTab never is, unless its Settings window is in front), so the target app
 /// stayed behind or only its window was raised. The WindowServer is asked instead (SkyLight, as yabai does): the
 /// app comes forward with that window, the window is made key, then Accessibility raises it above the app's other
-/// windows. Nothing here runs on the caller's thread: an app that does not answer costs the focus queue 0.25 s
-/// per Accessibility call, never the main thread.
+/// windows. When asked to restore, a hidden app is unhidden and a minimized window restored first. Nothing here
+/// runs on the caller's thread: an app that does not answer costs the focus queue 0.25 s per Accessibility call,
+/// never the main thread.
 enum WindowFocus {
     private static let queue = DispatchQueue(label: "com.math2it.cmdtab.focus", qos: .userInitiated)
     private static let timeout: Float = 0.25
     /// `kCPSUserGenerated`: the switch is the user's own, as a click on the window would be.
     private static let userGenerated: UInt32 = 0x200
 
-    /// Returns at once. The `focus` interval runs from this request to the last focus call's return.
-    static func focus(windowID: CGWindowID, pid: pid_t) {
+    /// Returns at once. With `restore` (a minimized window or one of a hidden app), the focus queue first unhides
+    /// the app when it is hidden and restores the window when it is minimized. The `focus` interval runs from this
+    /// request to the last focus call's return.
+    static func focus(windowID: CGWindowID, pid: pid_t, restore: Bool = false) {
         let interval = Perf.begin("focus")
         // CmdTab's own window (Settings): AppKit would answer the Accessibility calls on the focus queue and order
         // the window off the main thread, which macOS stops the app for. AppKit on the main thread instead.
@@ -28,11 +31,13 @@ enum WindowFocus {
             return
         }
         queue.async {
-            // Before the Accessibility lookup, so a window it cannot find still comes forward.
+            // A window to restore is looked up first: it leaves the Dock before it comes forward. Otherwise the
+            // lookup comes after, so a window it cannot find still comes forward at once.
+            let restored = restore ? restoredWindow(windowID: windowID, pid: pid) : nil
             if !bringForward(windowID: windowID, pid: pid) {
                 NSRunningApplication(processIdentifier: pid)?.activate()
             }
-            raise(windowID: windowID, pid: pid)
+            if let window = restore ? restored : axWindow(windowID: windowID, pid: pid) { raise(window) }
             Perf.end(interval)
         }
     }
@@ -63,22 +68,42 @@ enum WindowFocus {
         }
     }
 
-    /// On the focus queue: the elements are created and used here only.
-    private static func raise(windowID: CGWindowID, pid: pid_t) {
+    /// The Accessibility element of `windowID`, nil when the app does not list it. On the focus queue: the
+    /// elements are created and used there only.
+    private static func axWindow(windowID: CGWindowID, pid: pid_t) -> AXUIElement? {
         dispatchPrecondition(condition: .onQueue(queue))
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, timeout)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
-              let windows = value as? [AXUIElement] else { return }
+              let windows = value as? [AXUIElement] else { return nil }
         for window in windows {
             // The timeout of the app element does not carry over to its window elements.
             AXUIElementSetMessagingTimeout(window, timeout)
             var id = CGWindowID(0)
-            guard _AXUIElementGetWindow(window, &id) == .success, id == windowID else { continue }
-            AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
-            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-            return
+            if _AXUIElementGetWindow(window, &id) == .success, id == windowID { return window }
         }
+        return nil
+    }
+
+    /// Unhides the app of `pid` when it is hidden, then returns the element of `windowID`, restored from the Dock
+    /// when it was minimized. Nil when the app does not list the window.
+    private static func restoredWindow(windowID: CGWindowID, pid: pid_t) -> AXUIElement? {
+        dispatchPrecondition(condition: .onQueue(queue))
+        if let app = NSRunningApplication(processIdentifier: pid), app.isHidden { app.unhide() }
+        guard let window = axWindow(windowID: windowID, pid: pid) else { return nil }
+        var value: CFTypeRef?
+        if AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &value) == .success,
+           (value as? Bool) == true {
+            AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        }
+        return window
+    }
+
+    /// Makes `window` the main window of its app and raises it above the app's other windows.
+    private static func raise(_ window: AXUIElement) {
+        dispatchPrecondition(condition: .onQueue(queue))
+        AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
     }
 }

@@ -10,9 +10,11 @@ private let displays = [CGRect(x: 0, y: 0, width: 1000, height: 800), CGRect(x: 
 
 private func window(
     _ id: CGWindowID, pid: pid_t = 10, bounds: CGRect = CGRect(x: 100, y: 100, width: 400, height: 300),
-    layer: Int = 0, alpha: Double = 1
+    layer: Int = 0, alpha: Double = 1, isOnScreen: Bool = true
 ) -> WindowSnapshot {
-    WindowSnapshot(id: id, pid: pid, ownerName: "App", title: nil, bounds: bounds, layer: layer, alpha: alpha)
+    WindowSnapshot(
+        id: id, pid: pid, ownerName: "App", title: nil, bounds: bounds, layer: layer, alpha: alpha,
+        isOnScreen: isOnScreen)
 }
 
 @Suite struct WindowFilterTests {
@@ -35,6 +37,27 @@ private func window(
         // A pointer on no display counts for display 0.
         #expect(ids(mouse: CGPoint(x: -50, y: -50), scope: .mouseScreen) == [3, 2])
         #expect(ids(mouse: CGPoint(x: 10, y: 10), scope: .allScreens) == [7, 3, 9, 2, 5])
+    }
+
+    @Test func listAppendsOffScreenWindowsOnlyWhenTheirToggleIsOn() {
+        // Pid 20 is hidden. Window 4 is minimized; window 6 is a known window of the hidden app; window 8 is
+        // off screen and unknown to the classifier (on another Space).
+        let all = [
+            window(4, isOnScreen: false), window(1), window(6, pid: 20, isOnScreen: false),
+            window(8, pid: 20, isOnScreen: false), window(3),
+        ]
+        func ids(minimized: Bool, hidden: Bool) -> [CGWindowID] {
+            WindowFilter.list(
+                all: all, regularPIDs: regular, displays: displays, mouse: .zero, scope: .allScreens,
+                hiddenPIDs: [20], showMinimized: minimized, showHidden: hidden, isMinimized: { $0 == 4 },
+                isKnownWindow: { $0 == 4 || $0 == 6 }
+            ).map(\.id)
+        }
+
+        #expect(ids(minimized: false, hidden: false) == [1, 3])
+        #expect(ids(minimized: true, hidden: false) == [1, 3, 4])
+        #expect(ids(minimized: false, hidden: true) == [1, 3, 6])
+        #expect(ids(minimized: true, hidden: true) == [1, 3, 4, 6])
     }
 
     @Test(arguments: [
