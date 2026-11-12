@@ -48,7 +48,7 @@ xcodegen generate
 xcodebuild -project CmdTab.xcodeproj -scheme CmdTab -configuration Debug build
 ```
 
-Without the Developer ID certificate, add `CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=`. More in [CONTRIBUTING.md](CONTRIBUTING.md); releases in [docs/RELEASING.md](docs/RELEASING.md).
+Without the Developer ID certificate, add `CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=`. More in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
